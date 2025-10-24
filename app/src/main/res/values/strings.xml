@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">YT Focus</string>
+    <string name="enable_overlay">Enable and start overlay</string>
+    <string name="media_previous">Previous</string>
+    <string name="media_play">Play</string>
+    <string name="media_pause">Pause</string>
+    <string name="media_next">Next</string>
+    <string name="overlay_notification_channel">YT Focus Overlay</string>
+    <string name="overlay_notification_text">Overlay active for video focus</string>
+</resources>

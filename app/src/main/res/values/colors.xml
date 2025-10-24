@@ -1,0 +1,5 @@
+<resources>
+    <color name="black_mask">#FF000000</color>
+    <color name="control_bar_background">#FF111111</color>
+    <color name="control_icon_tint">#FFFFFFFF</color>
+</resources>

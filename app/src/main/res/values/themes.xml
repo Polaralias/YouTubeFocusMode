@@ -1,0 +1,11 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.YTFocus" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:colorBackground">@color/black_mask</item>
+        <item name="android:statusBarColor">@color/black_mask</item>
+        <item name="android:navigationBarColor">@color/black_mask</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="materialThemeOverlay">@style/ThemeOverlay.Material3.Dark</item>
+    </style>
+</resources>
