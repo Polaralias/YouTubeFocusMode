@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.polaralias.audiofocus">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -10,7 +11,7 @@
     <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
 
     <application
-        android:name=".AudioFocusApp"
+        android:name="com.polaralias.audiofocus.AudioFocusApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -18,7 +19,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AudioFocus">
         <activity
-            android:name=".MainActivity"
+            android:name="com.polaralias.audiofocus.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -27,7 +28,7 @@
         </activity>
 
         <activity
-            android:name=".DiagnosticsActivity"
+            android:name="com.polaralias.audiofocus.DiagnosticsActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.polaralias.audiofocus.DIAGNOSTICS" />
@@ -35,10 +36,10 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".admin.AdminActivity" />
+        <activity android:name="com.polaralias.audiofocus.admin.AdminActivity" />
 
         <receiver
-            android:name=".admin.YtDeviceAdminReceiver"
+            android:name="com.polaralias.audiofocus.admin.YtDeviceAdminReceiver"
             android:exported="true"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data
@@ -50,13 +51,13 @@
         </receiver>
 
         <service
-            android:name=".service.OverlayService"
+            android:name="com.polaralias.audiofocus.service.OverlayService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
         <service
-            android:name=".service.MediaListenerService"
+            android:name="com.polaralias.audiofocus.service.MediaListenerService"
             android:enabled="true"
             android:exported="false"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
@@ -67,7 +68,7 @@
         </service>
 
         <service
-            android:name=".service.UiDetectService"
+            android:name="com.polaralias.audiofocus.service.UiDetectService"
             android:enabled="true"
             android:exported="false"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
