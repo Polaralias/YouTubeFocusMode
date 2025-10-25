@@ -48,7 +48,7 @@ object PermissionStatus {
             val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             if (enabled.any { info ->
                     val component = ComponentName.unflattenFromString(info.id)
-                    component?.packageName == expectedPackage && component.className == expectedClass
+                    component?.packageName == expectedPackage && component?.className == expectedClass
                 }) {
                 return true
             }
@@ -62,7 +62,7 @@ object PermissionStatus {
         }
         return secureSetting.split(ACCESSIBILITY_SEPARATOR).any { entry ->
             val component = ComponentName.unflattenFromString(entry.trim())
-            component?.packageName == expectedPackage && component.className == expectedClass
+            component?.packageName == expectedPackage && component?.className == expectedClass
         }
     }
 
