@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.bus
+package com.polaralias.audiofocus.bus
 
 import android.graphics.RectF
 

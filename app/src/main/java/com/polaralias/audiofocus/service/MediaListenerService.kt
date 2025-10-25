@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.service
+package com.polaralias.audiofocus.service
 
 import android.content.ComponentName
 import android.content.Intent
@@ -8,11 +8,11 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.polaralias.ytfocus.media.MediaControllerStore
-import com.polaralias.ytfocus.util.ForegroundApp
-import com.polaralias.ytfocus.util.Logx
-import com.polaralias.ytfocus.util.PermissionStatus
-import com.polaralias.ytfocus.util.SafeServiceStarter
+import com.polaralias.audiofocus.media.MediaControllerStore
+import com.polaralias.audiofocus.util.ForegroundApp
+import com.polaralias.audiofocus.util.Logx
+import com.polaralias.audiofocus.util.PermissionStatus
+import com.polaralias.audiofocus.util.SafeServiceStarter
 
 class MediaListenerService : NotificationListenerService(),
     MediaSessionManager.OnActiveSessionsChangedListener {

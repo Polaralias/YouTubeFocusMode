@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus
+package com.polaralias.audiofocus
 
 import android.content.Context
 import android.graphics.Canvas
