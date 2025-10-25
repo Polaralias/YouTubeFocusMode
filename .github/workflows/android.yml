@@ -42,7 +42,10 @@ jobs:
 
       - name: Make gradlew executable
         run: chmod +x gradlew
-
+      
+      - name: Gradle version
+        run: ./gradlew --version
+        
       - name: Assemble debug
         run: ./gradlew --no-daemon assembleDebug
 
