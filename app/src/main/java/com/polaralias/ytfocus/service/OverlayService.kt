@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.media.MediaMetadata
@@ -94,7 +95,15 @@ class OverlayService : Service() {
         super.onCreate()
         createChannel()
         Logx.d("OverlayService.onCreate startForeground")
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        }
         Logx.d("OverlayService.onCreate startForeground complete")
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         MediaControllerStore.addListener(controllerListener)
