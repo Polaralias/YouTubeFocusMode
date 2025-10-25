@@ -8,7 +8,7 @@ import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.content.ContextCompat
-import com.polaralias.ytfocus.OverlayService
+import com.polaralias.ytfocus.service.OverlayService
 import com.polaralias.ytfocus.media.MediaControllerStore
 import com.polaralias.ytfocus.util.ForegroundApp
 
