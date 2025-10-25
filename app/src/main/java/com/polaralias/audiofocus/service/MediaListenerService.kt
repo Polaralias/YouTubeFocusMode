@@ -101,7 +101,11 @@ class MediaListenerService : NotificationListenerService(),
         val pkg = target?.packageName
         val foreground = pkg != null && ForegroundApp.isForeground(this, pkg)
         val hasPip = OverlayBus.pipRect != null && pkg != null
-        if (target != null && (foreground || hasPip)) {
+        val hasUiDetection = OverlayBus.hasRecentUiDetection()
+        Logx.d(
+            "MediaListenerService.evaluateControllers visibility pkg=$pkg foreground=$foreground hasPip=$hasPip uiDetect=$hasUiDetection"
+        )
+        if (target != null && (foreground || hasPip || hasUiDetection)) {
             sendShow()
         } else {
             sendHide()
