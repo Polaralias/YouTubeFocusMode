@@ -270,6 +270,7 @@ class OverlayService : Service() {
             lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
         manager.updateViewLayout(view, lp)
+        updateHoleForCurrentBounds()
     }
 
     private fun controlsParams(): WindowManager.LayoutParams {
@@ -466,13 +467,27 @@ class OverlayService : Service() {
     private fun applyHole() {
         val packageName = currentController?.packageName
         Logx.d("OverlayService.applyHole package=$packageName rect=$currentHole mask=$currentMaskEnabled")
-        blockView?.setHole(currentHole)
+        updateHoleForCurrentBounds()
         blockView?.setMaskEnabled(currentMaskEnabled)
     }
 
     private fun setHole(rect: RectF?) {
         currentHole = rect
-        blockView?.setHole(rect)
+        updateHoleForCurrentBounds()
+    }
+
+    private fun updateHoleForCurrentBounds() {
+        val hole = currentHole ?: run {
+            blockView?.setHole(null)
+            return
+        }
+        val pipRect = OverlayBus.pipRect
+        if (pipRect == null) {
+            blockView?.setHole(hole)
+        } else {
+            val translated = RectF(hole).apply { offset(-pipRect.left, -pipRect.top) }
+            blockView?.setHole(translated)
+        }
     }
 
     fun setMaskEnabled(enabled: Boolean) {
