@@ -41,9 +41,30 @@ object PermissionStatus {
     }
 
     private fun isAccessibilityEnabled(context: Context): Boolean {
-        val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager ?: return false
-        val id = ComponentName(context, UiDetectService::class.java).flattenToString()
-        val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-        return enabled.any { it.resolveInfo.serviceInfo.packageName == context.packageName && it.id == id }
+        val expectedClass = UiDetectService::class.java.name
+        val expectedPackage = context.packageName
+        val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        if (manager != null) {
+            val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            if (enabled.any { info ->
+                    val component = ComponentName.unflattenFromString(info.id)
+                    component?.packageName == expectedPackage && component.className == expectedClass
+                }) {
+                return true
+            }
+        }
+        val secureSetting = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty()
+        if (secureSetting.isEmpty()) {
+            return false
+        }
+        return secureSetting.split(ACCESSIBILITY_SEPARATOR).any { entry ->
+            val component = ComponentName.unflattenFromString(entry.trim())
+            component?.packageName == expectedPackage && component.className == expectedClass
+        }
     }
+
+    private const val ACCESSIBILITY_SEPARATOR = ':'
 }
