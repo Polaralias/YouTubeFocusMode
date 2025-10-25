@@ -16,6 +16,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Map the secret into env once, then use env in if: conditions
+    env:
+      HAS_SIGNING: ${{ secrets.SIGNING_STORE_BASE64 }}
+      SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+      SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+      SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,22 +54,19 @@ jobs:
           if-no-files-found: error
 
       - name: Decode release keystore
-        if: ${{ github.ref == 'refs/heads/main' && secrets.SIGNING_STORE_BASE64 != '' }}
+        if: ${{ github.ref == 'refs/heads/main' && env.HAS_SIGNING != '' }}
         run: |
-          echo "${{ secrets.SIGNING_STORE_BASE64 }}" | base64 -d > keystore.jks
+          echo "${HAS_SIGNING}" | base64 -d > keystore.jks
           echo "SIGNING_STORE_FILE=keystore.jks" >> $GITHUB_ENV
 
       - name: Assemble release
-        if: ${{ github.ref == 'refs/heads/main' && secrets.SIGNING_STORE_BASE64 != '' }}
+        if: ${{ github.ref == 'refs/heads/main' && env.HAS_SIGNING != '' }}
         env:
           SIGNING_STORE_FILE: ${{ env.SIGNING_STORE_FILE }}
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew --no-daemon assembleRelease
 
       - name: Upload release APK
-        if: ${{ github.ref == 'refs/heads/main' && secrets.SIGNING_STORE_BASE64 != '' }}
+        if: ${{ github.ref == 'refs/heads/main' && env.HAS_SIGNING != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: app-release
