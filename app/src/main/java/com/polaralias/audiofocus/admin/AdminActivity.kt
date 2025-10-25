@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.admin
+package com.polaralias.audiofocus.admin
 
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName

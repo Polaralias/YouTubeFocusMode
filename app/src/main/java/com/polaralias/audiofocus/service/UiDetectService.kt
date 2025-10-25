@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.service
+package com.polaralias.audiofocus.service
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
@@ -7,9 +7,9 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import com.polaralias.ytfocus.bus.OverlayBus
-import com.polaralias.ytfocus.util.ForegroundApp
-import com.polaralias.ytfocus.util.Logx
+import com.polaralias.audiofocus.bus.OverlayBus
+import com.polaralias.audiofocus.util.ForegroundApp
+import com.polaralias.audiofocus.util.Logx
 import kotlin.math.max
 
 class UiDetectService : AccessibilityService() {
@@ -64,11 +64,13 @@ class UiDetectService : AccessibilityService() {
         val videoMode = when {
             videoDetected -> true
             audioDetected -> false
-            else -> false
+            else -> true
         }
         OverlayBus.hole = rect
         OverlayBus.maskEnabled = videoMode
-        Logx.d("UiDetectService.spotify video=$videoMode rect=$rect")
+        Logx.d(
+            "UiDetectService.spotify video=$videoMode rect=$rect videoDetected=$videoDetected audioDetected=$audioDetected"
+        )
         startService(IntentBuilder.show(this))
     }
 

@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.service
+package com.polaralias.audiofocus.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -29,11 +29,11 @@ import android.widget.ImageButton
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
-import com.polaralias.ytfocus.HoleOverlayView
+import com.polaralias.audiofocus.HoleOverlayView
 import com.polaralias.audiofocus.R
-import com.polaralias.ytfocus.bus.OverlayBus
-import com.polaralias.ytfocus.media.MediaControllerStore
-import com.polaralias.ytfocus.util.Logx
+import com.polaralias.audiofocus.bus.OverlayBus
+import com.polaralias.audiofocus.media.MediaControllerStore
+import com.polaralias.audiofocus.util.Logx
 
 class OverlayService : Service() {
     companion object {

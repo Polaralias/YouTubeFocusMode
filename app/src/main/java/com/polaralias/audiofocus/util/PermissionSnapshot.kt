@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.util
+package com.polaralias.audiofocus.util
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AppOpsManager
@@ -9,7 +9,7 @@ import android.os.Process
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
-import com.polaralias.ytfocus.service.UiDetectService
+import com.polaralias.audiofocus.service.UiDetectService
 
 data class PermissionSnapshot(
     val overlay: Boolean,

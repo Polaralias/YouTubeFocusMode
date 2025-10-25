@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus
+package com.polaralias.audiofocus
 
 import android.content.Intent
 import android.net.Uri
@@ -9,13 +9,13 @@ import android.view.Menu
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
-import com.polaralias.ytfocus.admin.AdminActivity
-import com.polaralias.ytfocus.databinding.ActivityMainBinding
-import com.polaralias.ytfocus.DiagnosticsActivity
-import com.polaralias.ytfocus.service.OverlayService
-import com.polaralias.ytfocus.util.Logx
-import com.polaralias.ytfocus.util.PermissionStatus
-import com.polaralias.ytfocus.util.SafeServiceStarter
+import com.polaralias.audiofocus.admin.AdminActivity
+import com.polaralias.audiofocus.databinding.ActivityMainBinding
+import com.polaralias.audiofocus.DiagnosticsActivity
+import com.polaralias.audiofocus.service.OverlayService
+import com.polaralias.audiofocus.util.Logx
+import com.polaralias.audiofocus.util.PermissionStatus
+import com.polaralias.audiofocus.util.SafeServiceStarter
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding

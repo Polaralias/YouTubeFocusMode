@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.media
+package com.polaralias.audiofocus.media
 
 import android.media.session.MediaController
 import java.util.concurrent.CopyOnWriteArrayList

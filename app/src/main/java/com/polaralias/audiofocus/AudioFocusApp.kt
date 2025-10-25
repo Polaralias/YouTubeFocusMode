@@ -1,8 +1,8 @@
-package com.polaralias.ytfocus
+package com.polaralias.audiofocus
 
 import android.app.Application
 import android.os.StrictMode
-import com.polaralias.ytfocus.util.Logx
+import com.polaralias.audiofocus.util.Logx
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
