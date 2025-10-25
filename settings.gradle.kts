@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "YT Focus"
+rootProject.name = "AudioFocus"
 include(":app")

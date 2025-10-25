@@ -104,7 +104,8 @@ class MediaListenerService : NotificationListenerService(),
     private fun isTargetActive(controller: MediaController): Boolean {
         val pkg = controller.packageName
         val state = controller.playbackState?.state
-        val active = (pkg == YOUTUBE || pkg == YOUTUBE_MUSIC) && state == PlaybackState.STATE_PLAYING && ForegroundApp.isForeground(this, pkg)
+        val target = TARGET_PACKAGES.contains(pkg)
+        val active = target && state == PlaybackState.STATE_PLAYING && ForegroundApp.isForeground(this, pkg)
         Logx.d("MediaListenerService.isTargetActive package=$pkg state=$state active=$active")
         return active
     }
@@ -139,7 +140,10 @@ class MediaListenerService : NotificationListenerService(),
     }
 
     companion object {
-        private const val YOUTUBE = "com.google.android.youtube"
-        private const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"
+        private val TARGET_PACKAGES = setOf(
+            "com.google.android.youtube",
+            "com.google.android.apps.youtube.music",
+            "com.spotify.music"
+        )
     }
 }

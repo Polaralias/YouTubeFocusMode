@@ -30,18 +30,17 @@ import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.polaralias.ytfocus.HoleOverlayView
-import com.polaralias.ytfocus.R
+import com.polaralias.audiofocus.R
 import com.polaralias.ytfocus.bus.OverlayBus
 import com.polaralias.ytfocus.media.MediaControllerStore
 import com.polaralias.ytfocus.util.Logx
 
 class OverlayService : Service() {
     companion object {
-        const val ACTION_SHOW = "com.polaralias.ytfocus.action.SHOW"
-        const val ACTION_HIDE = "com.polaralias.ytfocus.action.HIDE"
-        private const val CHANNEL_ID = "yt_focus_mode"
+        const val ACTION_SHOW = "com.polaralias.audiofocus.action.SHOW"
+        const val ACTION_HIDE = "com.polaralias.audiofocus.action.HIDE"
+        private const val CHANNEL_ID = "veil_audio"
         private const val NOTIFICATION_ID = 101
-        private const val YOUTUBE_MUSIC_PACKAGE = "com.google.android.apps.youtube.music"
         @Volatile var mediaController: MediaController? = null
     }
 
@@ -340,7 +339,7 @@ class OverlayService : Service() {
             }
             else -> createConfigurationContext(resources.configuration)
         }
-        val themedContext = ContextThemeWrapper(baseContext, R.style.Theme_YTFocus)
+        val themedContext = ContextThemeWrapper(baseContext, R.style.Theme_AudioFocus)
         overlayContext = themedContext
         return themedContext
     }
@@ -434,22 +433,14 @@ class OverlayService : Service() {
 
     private fun applyHole() {
         val packageName = currentController?.packageName
-        if (packageName == YOUTUBE_MUSIC_PACKAGE) {
-            Logx.d("OverlayService.applyHole package=$packageName rect=$currentHole mask=$currentMaskEnabled")
-            blockView?.setHole(currentHole)
-            blockView?.setMaskEnabled(currentMaskEnabled)
-        } else {
-            Logx.d("OverlayService.applyHole package=$packageName clearing")
-            blockView?.setHole(null)
-            blockView?.setMaskEnabled(true)
-        }
+        Logx.d("OverlayService.applyHole package=$packageName rect=$currentHole mask=$currentMaskEnabled")
+        blockView?.setHole(currentHole)
+        blockView?.setMaskEnabled(currentMaskEnabled)
     }
 
     private fun setHole(rect: RectF?) {
         currentHole = rect
-        if (currentController?.packageName == YOUTUBE_MUSIC_PACKAGE) {
-            blockView?.setHole(rect)
-        }
+        blockView?.setHole(rect)
     }
 
     fun setMaskEnabled(enabled: Boolean) {

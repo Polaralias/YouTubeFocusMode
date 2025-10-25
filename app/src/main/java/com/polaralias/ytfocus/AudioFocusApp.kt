@@ -8,7 +8,7 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.Instant
 
-class YtFocusApp : Application() {
+class AudioFocusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         processStartTimestamp = Instant.now()
@@ -20,7 +20,7 @@ class YtFocusApp : Application() {
             Logx.e("Uncaught exception thread=${thread.name} message=${throwable.message}", throwable)
             previousHandler?.uncaughtException(thread, throwable)
         }
-        Logx.i("YtFocusApp.onCreate start processStartTimestamp=$processStartTimestamp")
+        Logx.i("AudioFocusApp.onCreate start processStartTimestamp=$processStartTimestamp")
     }
 
     private fun writeCrash(throwable: Throwable) {

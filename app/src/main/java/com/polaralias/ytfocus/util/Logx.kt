@@ -3,7 +3,7 @@ package com.polaralias.ytfocus.util
 import android.util.Log
 
 object Logx {
-    private const val TAG = "YTFocus"
+    private const val TAG = "AudioFocus"
 
     private fun prefix(message: String) = "[${Thread.currentThread().name}] $message"
 
