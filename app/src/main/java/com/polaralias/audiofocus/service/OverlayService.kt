@@ -152,6 +152,7 @@ class OverlayService : Service() {
         ensureBlockView()
         ensureControlsView()
         setHole(OverlayBus.hole)
+        applyBounds()
         setMaskEnabled(OverlayBus.maskEnabled)
         blockView?.visibility = View.VISIBLE
         controlsView?.visibility = View.VISIBLE
@@ -223,7 +224,8 @@ class OverlayService : Service() {
         view.requestApplyInsets()
     }
 
-    private fun overlayParams(): WindowManager.LayoutParams {
+    @Suppress("UNUSED_PARAMETER")
+    private fun overlayParams(fullscreen: Boolean = true): WindowManager.LayoutParams {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -238,6 +240,36 @@ class OverlayService : Service() {
         }
         params.flags = params.flags or WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
         return params
+    }
+
+    private fun overlayParamsForRect(r: RectF): WindowManager.LayoutParams {
+        val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+        return WindowManager.LayoutParams(
+            r.width().toInt().coerceAtLeast(1),
+            r.height().toInt().coerceAtLeast(1),
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = r.left.toInt()
+            y = r.top.toInt()
+            if (Build.VERSION.SDK_INT >= 28) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
+            }
+        }
+    }
+
+    private fun applyBounds() {
+        ensureBlockView()
+        val manager = windowManager ?: return
+        val view = blockView ?: return
+        val pip = OverlayBus.pipRect
+        val lp = if (pip != null) overlayParamsForRect(pip) else overlayParams(true)
+        if (!currentMaskEnabled) {
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+        manager.updateViewLayout(view, lp)
     }
 
     private fun controlsParams(): WindowManager.LayoutParams {
@@ -459,5 +491,6 @@ class OverlayService : Service() {
         val params = controlsView?.layoutParams as? WindowManager.LayoutParams ?: return
         params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         manager.updateViewLayout(controlsView, params)
+        applyBounds()
     }
 }

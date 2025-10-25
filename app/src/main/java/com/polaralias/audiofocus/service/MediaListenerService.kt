@@ -8,6 +8,7 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.polaralias.audiofocus.bus.OverlayBus
 import com.polaralias.audiofocus.media.MediaControllerStore
 import com.polaralias.audiofocus.util.ForegroundApp
 import com.polaralias.audiofocus.util.Logx
@@ -93,10 +94,16 @@ class MediaListenerService : NotificationListenerService(),
         if (target != null) {
             updateController(target)
             MediaControllerStore.setController(target)
-            sendShow()
         } else {
             updateController(null)
             MediaControllerStore.setController(null)
+        }
+        val pkg = target?.packageName
+        val foreground = pkg != null && ForegroundApp.isForeground(this, pkg)
+        val hasPip = OverlayBus.pipRect != null && pkg != null
+        if (target != null && (foreground || hasPip)) {
+            sendShow()
+        } else {
             sendHide()
         }
     }
@@ -105,7 +112,7 @@ class MediaListenerService : NotificationListenerService(),
         val pkg = controller.packageName
         val state = controller.playbackState?.state
         val target = TARGET_PACKAGES.contains(pkg)
-        val active = target && state == PlaybackState.STATE_PLAYING && ForegroundApp.isForeground(this, pkg)
+        val active = target && state == PlaybackState.STATE_PLAYING
         Logx.d("MediaListenerService.isTargetActive package=$pkg state=$state active=$active")
         return active
     }
