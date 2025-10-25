@@ -58,4 +58,8 @@ object ForegroundApp {
         Logx.d("ForegroundApp.isForeground result package=$packageName cached=$cachedForegroundPackage result=$result")
         return result
     }
+
+    fun isTargetInForeground(context: Context): Boolean {
+        return isForeground(context, "com.google.android.youtube") || isForeground(context, "com.google.android.apps.youtube.music")
+    }
 }
