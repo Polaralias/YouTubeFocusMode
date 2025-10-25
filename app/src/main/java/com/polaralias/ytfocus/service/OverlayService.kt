@@ -28,6 +28,7 @@ import com.polaralias.ytfocus.R
 import com.polaralias.ytfocus.bus.OverlayBus
 import com.polaralias.ytfocus.media.MediaControllerStore
 import com.polaralias.ytfocus.overlay.HoleOverlayView
+import com.polaralias.ytfocus.util.Logx
 
 class OverlayService : Service() {
     companion object {
@@ -61,38 +62,47 @@ class OverlayService : Service() {
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
+            Logx.d("OverlayService.controllerCallback.onPlaybackStateChanged state=${state?.state}")
             updateState()
         }
 
         override fun onMetadataChanged(metadata: MediaMetadata?) {
+            Logx.d("OverlayService.controllerCallback.onMetadataChanged")
             updateDuration()
         }
 
         override fun onSessionDestroyed() {
+            Logx.d("OverlayService.controllerCallback.onSessionDestroyed")
             clearController()
             hideOverlay()
         }
     }
 
     private val controllerListener: (MediaController?) -> Unit = {
+        Logx.d("OverlayService.controllerListener package=${it?.packageName}")
         attachController(it)
     }
 
     private val holeListener: (RectF?) -> Unit = {
+        Logx.d("OverlayService.holeListener rect=$it")
         currentHole = it
         applyHole()
     }
 
     override fun onCreate() {
+        Logx.d("OverlayService.onCreate sdk=${Build.VERSION.SDK_INT} canDraw=${Settings.canDrawOverlays(this)}")
         super.onCreate()
         createChannel()
+        Logx.d("OverlayService.onCreate startForeground")
         startForeground(NOTIFICATION_ID, buildNotification())
+        Logx.d("OverlayService.onCreate startForeground complete")
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         MediaControllerStore.addListener(controllerListener)
         OverlayBus.addListener(holeListener)
     }
 
     override fun onDestroy() {
+        Logx.d("OverlayService.onDestroy")
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
         OverlayBus.removeListener(holeListener)
@@ -102,6 +112,7 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Logx.d("OverlayService.onStartCommand action=${intent?.action} flags=$flags startId=$startId")
         when (intent?.action) {
             ACTION_HIDE -> hideOverlay()
             else -> showOverlay()
@@ -129,10 +140,14 @@ class OverlayService : Service() {
     }
 
     private fun showOverlay() {
-        if (!Settings.canDrawOverlays(this)) {
+        val canDraw = Settings.canDrawOverlays(this)
+        Logx.d("OverlayService.showOverlay canDraw=$canDraw")
+        if (!canDraw) {
+            Logx.d("OverlayService.showOverlay blocked by permission")
             return
         }
         if (overlayView == null) {
+            Logx.d("OverlayService.showOverlay inflate view")
             val inflater = LayoutInflater.from(this)
             val view = inflater.inflate(R.layout.service_overlay, null)
             overlayView = view
@@ -154,6 +169,7 @@ class OverlayService : Service() {
             )
             params.gravity = Gravity.TOP or Gravity.START
             windowManager?.addView(view, params)
+            Logx.d("OverlayService.showOverlay view added")
         }
         attachController(MediaControllerStore.getController())
         handler.removeCallbacks(ticker)
@@ -161,12 +177,14 @@ class OverlayService : Service() {
     }
 
     private fun hideOverlay() {
+        Logx.d("OverlayService.hideOverlay")
         handler.removeCallbacks(ticker)
         removeOverlay()
         clearController()
     }
 
     private fun removeOverlay() {
+        Logx.d("OverlayService.removeOverlay hasView=${overlayView != null}")
         overlayView?.let { windowManager?.removeView(it) }
         overlayView = null
         holeView = null
@@ -180,13 +198,16 @@ class OverlayService : Service() {
 
     private fun configureControls() {
         previousButton?.setOnClickListener {
+            Logx.d("OverlayService.previousButton click")
             currentController?.transportControls?.skipToPrevious()
         }
         nextButton?.setOnClickListener {
+            Logx.d("OverlayService.nextButton click")
             currentController?.transportControls?.skipToNext()
         }
         playPauseButton?.setOnClickListener {
             val state = currentController?.playbackState?.state
+            Logx.d("OverlayService.playPauseButton click state=$state")
             if (state == PlaybackState.STATE_PLAYING) {
                 currentController?.transportControls?.pause()
             } else {
@@ -195,12 +216,14 @@ class OverlayService : Service() {
         }
         seekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(seekBar: SeekBar) {
+                Logx.d("OverlayService.seekBar.onStartTrackingTouch")
                 isTracking = true
             }
 
             override fun onStopTrackingTouch(seekBar: SeekBar) {
                 val duration = currentController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
                 val position = duration * seekBar.progress / seekBar.max
+                Logx.d("OverlayService.seekBar.onStopTrackingTouch duration=$duration position=$position")
                 currentController?.transportControls?.seekTo(position)
                 isTracking = false
             }
@@ -217,9 +240,11 @@ class OverlayService : Service() {
 
     private fun attachController(controller: MediaController?) {
         if (controller == currentController) {
+            Logx.d("OverlayService.attachController unchanged=${controller?.packageName}")
             updateState()
             return
         }
+        Logx.d("OverlayService.attachController from=${currentController?.packageName} to=${controller?.packageName}")
         currentController?.unregisterCallback(controllerCallback)
         currentController = controller
         if (controller != null) {
@@ -232,6 +257,7 @@ class OverlayService : Service() {
     }
 
     private fun clearController() {
+        Logx.d("OverlayService.clearController from=${currentController?.packageName}")
         currentController?.unregisterCallback(controllerCallback)
         currentController = null
     }
@@ -239,10 +265,12 @@ class OverlayService : Service() {
     private fun updateState() {
         val controller = currentController
         if (controller == null) {
+            Logx.d("OverlayService.updateState controller null")
             hideOverlay()
             return
         }
         val state = controller.playbackState?.state
+        Logx.d("OverlayService.updateState package=${controller.packageName} state=$state canDraw=${Settings.canDrawOverlays(this)}")
         if (state == PlaybackState.STATE_PLAYING) {
             handler.removeCallbacks(ticker)
             handler.post(ticker)
@@ -262,6 +290,7 @@ class OverlayService : Service() {
 
     private fun updateDuration() {
         val duration = currentController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        Logx.d("OverlayService.updateDuration duration=$duration")
         totalLabel?.text = formatTime(duration)
     }
 
@@ -296,9 +325,12 @@ class OverlayService : Service() {
 
     private fun applyHole() {
         val controller = currentController
-        if (controller?.packageName == YOUTUBE_MUSIC_PACKAGE) {
+        val packageName = controller?.packageName
+        if (packageName == YOUTUBE_MUSIC_PACKAGE) {
+            Logx.d("OverlayService.applyHole package=$packageName rect=$currentHole")
             holeView?.setHole(currentHole)
         } else {
+            Logx.d("OverlayService.applyHole package=$packageName clearing")
             holeView?.setHole(null)
         }
     }

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
 
     <application
+        android:name=".YtFocusApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="YT Focus"
@@ -20,6 +21,15 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.polaralias.ytfocus.DiagnosticsActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.polaralias.ytfocus.DIAGNOSTICS" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
