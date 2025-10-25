@@ -9,8 +9,9 @@ import android.view.Menu
 import android.view.MenuItem
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import com.polaralias.ytfocus.DiagnosticsActivity
+import com.polaralias.ytfocus.admin.AdminActivity
 import com.polaralias.ytfocus.databinding.ActivityMainBinding
+import com.polaralias.ytfocus.DiagnosticsActivity
 import com.polaralias.ytfocus.service.OverlayService
 import com.polaralias.ytfocus.util.Logx
 import com.polaralias.ytfocus.util.PermissionStatus
@@ -101,6 +102,10 @@ class MainActivity : AppCompatActivity() {
             Logx.d("MainActivity.startOverlay start")
             startOverlayService()
             Logx.d("MainActivity.startOverlay end")
+        }
+        binding.buttonAdminSettings.setOnClickListener {
+            Logx.d("MainActivity.openAdminSettings")
+            startActivity(Intent(this, AdminActivity::class.java))
         }
     }
 

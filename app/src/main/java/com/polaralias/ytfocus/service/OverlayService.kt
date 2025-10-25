@@ -23,24 +23,26 @@ import android.view.Display
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import com.polaralias.ytfocus.HoleOverlayView
 import com.polaralias.ytfocus.R
 import com.polaralias.ytfocus.bus.OverlayBus
 import com.polaralias.ytfocus.media.MediaControllerStore
-import com.polaralias.ytfocus.overlay.HoleOverlayView
 import com.polaralias.ytfocus.util.Logx
 
 class OverlayService : Service() {
     companion object {
         const val ACTION_SHOW = "com.polaralias.ytfocus.action.SHOW"
         const val ACTION_HIDE = "com.polaralias.ytfocus.action.HIDE"
-        private const val CHANNEL_ID = "overlay_channel"
+        private const val CHANNEL_ID = "yt_focus_mode"
         private const val NOTIFICATION_ID = 101
         private const val YOUTUBE_MUSIC_PACKAGE = "com.google.android.apps.youtube.music"
+        @Volatile var mediaController: MediaController? = null
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -53,8 +55,8 @@ class OverlayService : Service() {
 
     private var windowManager: WindowManager? = null
     private var overlayContext: Context? = null
-    private var overlayView: View? = null
-    private var holeView: HoleOverlayView? = null
+    private var blockView: HoleOverlayView? = null
+    private var controlsView: View? = null
     private var playPauseButton: ImageButton? = null
     private var previousButton: ImageButton? = null
     private var nextButton: ImageButton? = null
@@ -64,6 +66,7 @@ class OverlayService : Service() {
     private var currentController: MediaController? = null
     private var isTracking = false
     private var currentHole: RectF? = null
+    private var currentMaskEnabled = true
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
@@ -88,17 +91,10 @@ class OverlayService : Service() {
         attachController(it)
     }
 
-    private val holeListener: (RectF?) -> Unit = {
-        Logx.d("OverlayService.holeListener rect=$it")
-        currentHole = it
-        applyHole()
-    }
-
     override fun onCreate() {
         Logx.d("OverlayService.onCreate sdk=${Build.VERSION.SDK_INT} canDraw=${Settings.canDrawOverlays(this)}")
         super.onCreate()
         createChannel()
-        Logx.d("OverlayService.onCreate startForeground")
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(
                 NOTIFICATION_ID,
@@ -108,16 +104,13 @@ class OverlayService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, buildNotification())
         }
-        Logx.d("OverlayService.onCreate startForeground complete")
         MediaControllerStore.addListener(controllerListener)
-        OverlayBus.addListener(holeListener)
     }
 
     override fun onDestroy() {
         Logx.d("OverlayService.onDestroy")
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
-        OverlayBus.removeListener(holeListener)
         MediaControllerStore.removeListener(controllerListener)
         clearController()
         removeOverlay()
@@ -137,14 +130,14 @@ class OverlayService : Service() {
     private fun createChannel() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-            val channel = NotificationChannel(CHANNEL_ID, getString(R.string.overlay_notification_channel), NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(CHANNEL_ID, getString(R.string.notif_channel_name), NotificationManager.IMPORTANCE_LOW)
             manager.createNotificationChannel(channel)
         }
     }
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.app_name))
+            .setContentTitle(getString(R.string.notif_running))
             .setContentText(getString(R.string.overlay_notification_text))
             .setSmallIcon(android.R.drawable.stat_notify_more)
             .setOngoing(true)
@@ -155,38 +148,15 @@ class OverlayService : Service() {
         val canDraw = Settings.canDrawOverlays(this)
         Logx.d("OverlayService.showOverlay canDraw=$canDraw")
         if (!canDraw) {
-            Logx.d("OverlayService.showOverlay blocked by permission")
             return
         }
-        if (overlayView == null) {
-            Logx.d("OverlayService.showOverlay inflate view")
-            val context = obtainOverlayContext()
-            val inflater = LayoutInflater.from(context)
-            val view = inflater.inflate(R.layout.service_overlay, null)
-            overlayView = view
-            holeView = view.findViewById(R.id.holeView)
-            playPauseButton = view.findViewById(R.id.buttonPlayPause)
-            previousButton = view.findViewById(R.id.buttonPrevious)
-            nextButton = view.findViewById(R.id.buttonNext)
-            elapsedLabel = view.findViewById(R.id.elapsedTime)
-            totalLabel = view.findViewById(R.id.totalTime)
-            seekBar = view.findViewById(R.id.seekBar)
-            configureControls()
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                type,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT
-            )
-            params.gravity = Gravity.TOP or Gravity.START
-            val manager = (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).also {
-                windowManager = it
-            }
-            manager.addView(view, params)
-            Logx.d("OverlayService.showOverlay view added")
-        }
+        ensureBlockView()
+        ensureControlsView()
+        setHole(OverlayBus.hole)
+        setMaskEnabled(OverlayBus.maskEnabled)
+        blockView?.visibility = View.VISIBLE
+        controlsView?.visibility = View.VISIBLE
+        updateForOrientation()
         attachController(MediaControllerStore.getController())
         handler.removeCallbacks(ticker)
         handler.post(ticker)
@@ -199,11 +169,110 @@ class OverlayService : Service() {
         clearController()
     }
 
+    private fun ensureBlockView() {
+        if (blockView != null) {
+            return
+        }
+        val context = obtainOverlayContext()
+        val manager = (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).also {
+            windowManager = it
+        }
+        val view = HoleOverlayView(context)
+        blockView = view
+        val params = overlayParams()
+        manager.addView(view, params)
+        view.setOnApplyWindowInsetsListener { v, insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val sb = insets.getInsets(WindowInsets.Type.systemBars())
+                v.setPadding(0, sb.top, 0, 0)
+            } else {
+                v.setPadding(0, insets.systemWindowInsetTop, 0, 0)
+            }
+            insets
+        }
+        view.requestApplyInsets()
+    }
+
+    private fun ensureControlsView() {
+        if (controlsView != null) {
+            return
+        }
+        val context = obtainOverlayContext()
+        val manager = (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).also {
+            windowManager = it
+        }
+        val view = LayoutInflater.from(context).inflate(R.layout.service_overlay, null)
+        controlsView = view
+        playPauseButton = view.findViewById(R.id.buttonPlayPause)
+        previousButton = view.findViewById(R.id.buttonPrevious)
+        nextButton = view.findViewById(R.id.buttonNext)
+        elapsedLabel = view.findViewById(R.id.elapsedTime)
+        totalLabel = view.findViewById(R.id.totalTime)
+        seekBar = view.findViewById(R.id.seekBar)
+        configureControls()
+        val params = controlsParams()
+        manager.addView(view, params)
+        view.setOnApplyWindowInsetsListener { v, insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val sb = insets.getInsets(WindowInsets.Type.systemBars())
+                v.setPadding(sb.left, 0, sb.right, sb.bottom)
+            } else {
+                v.setPadding(insets.systemWindowInsetLeft, 0, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+            }
+            insets
+        }
+        view.requestApplyInsets()
+    }
+
+    private fun overlayParams(): WindowManager.LayoutParams {
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            type,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.TOP or Gravity.START
+        if (Build.VERSION.SDK_INT >= 28) {
+            params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
+        }
+        params.flags = params.flags or WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
+        return params
+    }
+
+    private fun controlsParams(): WindowManager.LayoutParams {
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            type,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        if (Build.VERSION.SDK_INT >= 28) {
+            params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
+        }
+        params.flags = params.flags or WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
+        return params
+    }
+
     private fun removeOverlay() {
-        Logx.d("OverlayService.removeOverlay hasView=${overlayView != null}")
-        overlayView?.let { windowManager?.removeView(it) }
-        overlayView = null
-        holeView = null
+        blockView?.let { view ->
+            try {
+                windowManager?.removeView(view)
+            } catch (_: Throwable) {
+            }
+        }
+        controlsView?.let { view ->
+            try {
+                windowManager?.removeView(view)
+            } catch (_: Throwable) {
+            }
+        }
+        blockView = null
+        controlsView = null
         playPauseButton = null
         previousButton = null
         nextButton = null
@@ -258,7 +327,6 @@ class OverlayService : Service() {
 
     private fun obtainOverlayContext(): Context {
         overlayContext?.let { return it }
-
         val baseContext = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
                 val displayManager = getSystemService(DisplayManager::class.java)
@@ -272,7 +340,6 @@ class OverlayService : Service() {
             }
             else -> createConfigurationContext(resources.configuration)
         }
-
         val themedContext = ContextThemeWrapper(baseContext, R.style.Theme_YTFocus)
         overlayContext = themedContext
         return themedContext
@@ -287,6 +354,7 @@ class OverlayService : Service() {
         Logx.d("OverlayService.attachController from=${currentController?.packageName} to=${controller?.packageName}")
         currentController?.unregisterCallback(controllerCallback)
         currentController = controller
+        mediaController = controller
         if (controller != null) {
             controller.registerCallback(controllerCallback)
             updateDuration()
@@ -300,6 +368,7 @@ class OverlayService : Service() {
         Logx.d("OverlayService.clearController from=${currentController?.packageName}")
         currentController?.unregisterCallback(controllerCallback)
         currentController = null
+        mediaController = null
     }
 
     private fun updateState() {
@@ -364,14 +433,40 @@ class OverlayService : Service() {
     }
 
     private fun applyHole() {
-        val controller = currentController
-        val packageName = controller?.packageName
+        val packageName = currentController?.packageName
         if (packageName == YOUTUBE_MUSIC_PACKAGE) {
-            Logx.d("OverlayService.applyHole package=$packageName rect=$currentHole")
-            holeView?.setHole(currentHole)
+            Logx.d("OverlayService.applyHole package=$packageName rect=$currentHole mask=$currentMaskEnabled")
+            blockView?.setHole(currentHole)
+            blockView?.setMaskEnabled(currentMaskEnabled)
         } else {
             Logx.d("OverlayService.applyHole package=$packageName clearing")
-            holeView?.setHole(null)
+            blockView?.setHole(null)
+            blockView?.setMaskEnabled(true)
         }
+    }
+
+    private fun setHole(rect: RectF?) {
+        currentHole = rect
+        if (currentController?.packageName == YOUTUBE_MUSIC_PACKAGE) {
+            blockView?.setHole(rect)
+        }
+    }
+
+    fun setMaskEnabled(enabled: Boolean) {
+        currentMaskEnabled = enabled
+        blockView?.setMaskEnabled(enabled)
+        val manager = windowManager ?: return
+        val view = blockView ?: return
+        val lp = view.layoutParams as WindowManager.LayoutParams
+        val type = if (enabled) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        lp.flags = (lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()) or type
+        manager.updateViewLayout(view, lp)
+    }
+
+    private fun updateForOrientation() {
+        val manager = windowManager ?: return
+        val params = controlsView?.layoutParams as? WindowManager.LayoutParams ?: return
+        params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        manager.updateViewLayout(controlsView, params)
     }
 }

@@ -1,11 +1,15 @@
 <resources>
-    <string name="app_name">YT Focus</string>
-    <string name="enable_overlay">Enable and start overlay</string>
+    <string name="app_name">YouTube Focus Mode</string>
+    <string name="notif_channel_name">YouTube Focus Mode</string>
+    <string name="notif_running">YouTube Focus Mode running</string>
+    <string name="admin_title">Device admin for uninstall protection</string>
+    <string name="admin_desc">Prevents uninstall until admin is disabled</string>
+    <string name="enable_overlay">Enable and start YouTube Focus Mode overlay</string>
     <string name="request_overlay_permission">Request overlay permission</string>
     <string name="open_notification_listener_settings">Open notification listener settings</string>
     <string name="open_usage_access_settings">Open usage access settings</string>
     <string name="open_accessibility_settings">Open accessibility settings</string>
-    <string name="start_overlay_service">Start overlay service</string>
+    <string name="start_overlay_service">Start YouTube Focus Mode overlay</string>
     <string name="status_overlay">Overlay permission: %1$s</string>
     <string name="status_notification_listener">Notification listener enabled: %1$s</string>
     <string name="status_usage_access">Usage access granted: %1$s</string>
@@ -20,6 +24,7 @@
     <string name="media_play">Play</string>
     <string name="media_pause">Pause</string>
     <string name="media_next">Next</string>
-    <string name="overlay_notification_channel">YT Focus Overlay</string>
-    <string name="overlay_notification_text">Overlay active for video focus</string>
+    <string name="overlay_notification_channel">YouTube Focus Mode</string>
+    <string name="overlay_notification_text">YouTube Focus Mode overlay active for video focus</string>
+    <string name="open_admin_settings">Manage uninstall protection</string>
 </resources>
