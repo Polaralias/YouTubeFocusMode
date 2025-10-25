@@ -7,8 +7,8 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.Menu
 import android.view.MenuItem
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
 import com.polaralias.ytfocus.admin.AdminActivity
 import com.polaralias.ytfocus.databinding.ActivityMainBinding
 import com.polaralias.ytfocus.DiagnosticsActivity
@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         Logx.d("MainActivity.onCreate start savedInstanceState=${savedInstanceState != null}")
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        WindowCompat.setDecorFitsSystemWindows(window, true)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setupButtons()

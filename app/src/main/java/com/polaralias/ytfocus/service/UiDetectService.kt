@@ -55,6 +55,8 @@ class UiDetectService : AccessibilityService() {
         val queue = ArrayDeque<AccessibilityNodeInfo?>()
         queue.add(root)
         val bounds = Rect()
+        val metrics = resources.displayMetrics
+        val padding = TOGGLE_PADDING_DP * metrics.density
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst() ?: continue
             val text = node.text?.toString()?.lowercase()
@@ -62,13 +64,19 @@ class UiDetectService : AccessibilityService() {
             val match = when {
                 text == null && desc == null -> false
                 else -> {
-                    val value = text ?: desc
-                    value != null && (value.contains("switch to audio") || value.contains("switch to video") || value == "video" || value == "audio")
+                    val value = (text ?: desc).orEmpty()
+                    val search = value.lowercase()
+                    val containsKeyword = KEYWORD_MATCHES.any { search.contains(it) }
+                    val exactMatch = EXACT_MATCHES.any { search == it }
+                    containsKeyword || exactMatch
                 }
             }
             if (match) {
                 node.getBoundsInScreen(bounds)
-                return RectF(bounds)
+                var rect = RectF(bounds)
+                rect.inset(-padding, -padding)
+                rect = clampToScreen(rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
+                return enrichWithParentBounds(node, rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
             }
             for (i in 0 until node.childCount) {
                 queue.add(node.getChild(i))
@@ -90,6 +98,42 @@ class UiDetectService : AccessibilityService() {
         val right = metrics.widthPixels - margin
         val bottom = top + size
         return RectF(max(0f, left), top, max(0f, right), bottom)
+    }
+
+    private fun enrichWithParentBounds(
+        node: AccessibilityNodeInfo,
+        fallback: RectF,
+        screenWidth: Float,
+        screenHeight: Float
+    ): RectF {
+        var best = fallback
+        var parent = node.parent
+        val parentBounds = Rect()
+        var depth = 0
+        while (parent != null && depth < 4) {
+            parent.getBoundsInScreen(parentBounds)
+            if (!parentBounds.isEmpty) {
+                val rect = clampToScreen(RectF(parentBounds), screenWidth, screenHeight)
+                val wider = rect.width() >= best.width() * 0.9f
+                val taller = rect.height() >= best.height() * 0.9f
+                if (wider && taller) {
+                    best = rect
+                }
+            }
+            val next = parent.parent
+            parent.recycle()
+            parent = next
+            depth++
+        }
+        return best
+    }
+
+    private fun clampToScreen(rect: RectF, screenWidth: Float, screenHeight: Float): RectF {
+        val left = rect.left.coerceIn(0f, screenWidth)
+        val top = rect.top.coerceIn(0f, screenHeight)
+        val right = rect.right.coerceIn(left, screenWidth)
+        val bottom = rect.bottom.coerceIn(top, screenHeight)
+        return RectF(left, top, right, bottom)
     }
 
     private fun isAudioMode(root: AccessibilityNodeInfo): Boolean {
@@ -120,5 +164,12 @@ class UiDetectService : AccessibilityService() {
     companion object {
         private const val YOUTUBE_MUSIC_PACKAGE = "com.google.android.apps.youtube.music"
         private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
+        private const val TOGGLE_PADDING_DP = 12f
+        private val KEYWORD_MATCHES = listOf(
+            "switch to audio",
+            "switch to song",
+            "switch to video"
+        )
+        private val EXACT_MATCHES = listOf("audio", "song", "video")
     }
 }
