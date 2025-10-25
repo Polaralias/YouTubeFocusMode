@@ -3,6 +3,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseKeystorePath = System.getenv("SIGNING_STORE_FILE")?.let { file(it) } ?: file("keystore.jks")
+val releaseStorePassword = System.getenv("SIGNING_STORE_PASSWORD")
+val releaseKeyAlias = System.getenv("SIGNING_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+val hasReleaseSigningConfig = releaseKeystorePath.exists() &&
+    releaseStorePassword != null &&
+    releaseKeyAlias != null &&
+    releaseKeyPassword != null
+
 android {
     namespace = "com.polaralias.audiofocus"
     compileSdk = 34
@@ -21,11 +30,13 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file(System.getenv("SIGNING_STORE_FILE") ?: "keystore.jks")
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-            keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = releaseKeystorePath
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -36,7 +47,11 @@ android {
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseSigningConfig) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
