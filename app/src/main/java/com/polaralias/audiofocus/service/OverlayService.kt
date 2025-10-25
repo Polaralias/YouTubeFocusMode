@@ -153,6 +153,7 @@ class OverlayService : Service() {
         ensureControlsView()
         setHole(OverlayBus.hole)
         setMaskEnabled(OverlayBus.maskEnabled)
+        applyBounds()
         blockView?.visibility = View.VISIBLE
         controlsView?.visibility = View.VISIBLE
         updateForOrientation()
@@ -238,6 +239,24 @@ class OverlayService : Service() {
         }
         params.flags = params.flags or WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR
         return params
+    }
+
+    private fun overlayParamsForRect(r: RectF): WindowManager.LayoutParams {
+        val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+        return WindowManager.LayoutParams(
+            r.width().toInt().coerceAtLeast(1),
+            r.height().toInt().coerceAtLeast(1),
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = r.left.toInt()
+            y = r.top.toInt()
+            if (Build.VERSION.SDK_INT >= 28) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
+            }
+        }
     }
 
     private fun controlsParams(): WindowManager.LayoutParams {
@@ -459,5 +478,20 @@ class OverlayService : Service() {
         val params = controlsView?.layoutParams as? WindowManager.LayoutParams ?: return
         params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
         manager.updateViewLayout(controlsView, params)
+        applyBounds()
+    }
+
+    private fun applyBounds() {
+        if (blockView == null) {
+            ensureBlockView()
+        }
+        val view = blockView ?: return
+        val wm = windowManager ?: return
+        val pip = OverlayBus.pipRect
+        val lp = if (pip != null) overlayParamsForRect(pip) else overlayParams()
+        if (!currentMaskEnabled) {
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+        wm.updateViewLayout(view, lp)
     }
 }

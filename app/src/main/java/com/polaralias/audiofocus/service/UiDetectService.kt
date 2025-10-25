@@ -21,15 +21,51 @@ class UiDetectService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val root = rootInActiveWindow ?: return
         val pkg = event?.packageName?.toString() ?: root.packageName?.toString()
+        if (pkg == null) {
+            OverlayBus.pipRect = null
+            return
+        }
         Logx.d("UiDetectService.onAccessibilityEvent package=$pkg type=${event?.eventType}")
         if (!SUPPORTED_PACKAGES.contains(pkg)) {
             return
         }
 
-        val inForeground = ForegroundApp.isTargetInForeground(this)
         val controller = OverlayService.mediaController
         val activeFromTarget = controller?.packageName == pkg && controller.playbackState?.state == PlaybackState.STATE_PLAYING
-        if (!inForeground || !activeFromTarget) {
+        if (!activeFromTarget) {
+            OverlayBus.pipRect = null
+            return
+        }
+
+        val pip = findPipRectFor(pkg)
+        if (pip != null) {
+            OverlayBus.pipRect = pip
+            when (pkg) {
+                YOUTUBE_PACKAGE -> {
+                    OverlayBus.hole = null
+                    OverlayBus.maskEnabled = true
+                }
+                YOUTUBE_MUSIC_PACKAGE -> {
+                    val isAudio = isAudioMode(root)
+                    val hole = findAudioToggleRect(root) ?: defaultToggleGuess(root)
+                    OverlayBus.hole = hole
+                    OverlayBus.maskEnabled = !isAudio
+                }
+                SPOTIFY_PACKAGE -> {
+                    val vm = isSpotifyVideoMode(root)
+                    val hole = findSpotifyToggleRect(root) ?: defaultSpotifyToggleGuess(root)
+                    OverlayBus.hole = hole
+                    OverlayBus.maskEnabled = vm
+                }
+            }
+            startService(IntentBuilder.show(this))
+            return
+        } else {
+            OverlayBus.pipRect = null
+        }
+
+        val inForeground = ForegroundApp.isTargetInForeground(this)
+        if (!inForeground) {
             return
         }
 
@@ -53,22 +89,6 @@ class UiDetectService : AccessibilityService() {
         OverlayBus.hole = rect
         val audio = isAudioMode(root)
         OverlayBus.maskEnabled = !audio
-        startService(IntentBuilder.show(this))
-    }
-
-    private fun handleSpotify(root: AccessibilityNodeInfo) {
-        val toggle = findSpotifyToggleByText(root) ?: findSpotifyToggleById(root)
-        val rect = toggle?.rect ?: defaultToggleGuess(root)
-        val videoDetected = toggle?.state == ToggleState.VIDEO || hasVisibleVideoNode(root)
-        val audioDetected = toggle?.state == ToggleState.AUDIO && !videoDetected
-        val videoMode = when {
-            videoDetected -> true
-            audioDetected -> false
-            else -> false
-        }
-        OverlayBus.hole = rect
-        OverlayBus.maskEnabled = videoMode
-        Logx.d("UiDetectService.spotify video=$videoMode rect=$rect")
         startService(IntentBuilder.show(this))
     }
 
@@ -106,104 +126,13 @@ class UiDetectService : AccessibilityService() {
         return null
     }
 
-    private fun findSpotifyToggleByText(root: AccessibilityNodeInfo): ToggleMatch? {
-        val queue = ArrayDeque<AccessibilityNodeInfo?>()
-        queue.add(root)
-        val bounds = Rect()
-        val metrics = resources.displayMetrics
-        val padding = TOGGLE_PADDING_DP * metrics.density
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst() ?: continue
-            if (!node.isVisibleToUser) {
-                for (i in 0 until node.childCount) {
-                    queue.add(node.getChild(i))
-                }
-                continue
-            }
-            val text = node.text?.toString()
-            val desc = node.contentDescription?.toString()
-            val value = when {
-                !text.isNullOrBlank() -> text
-                !desc.isNullOrBlank() -> desc
-                else -> null
-            }
-            if (value != null) {
-                val lower = value.lowercase()
-                val matched = SPOTIFY_TEXT_MATCHES.any { key -> lower.contains(key) }
-                if (matched) {
-                    node.getBoundsInScreen(bounds)
-                    if (!bounds.isEmpty) {
-                        var rect = RectF(bounds)
-                        rect.inset(-padding, -padding)
-                        rect = clampToScreen(rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                        rect = enrichWithParentBounds(node, rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                        val state = when {
-                            lower.contains("hide video") || lower.contains("switch to audio") -> ToggleState.VIDEO
-                            lower.contains("show video") || lower.contains("switch to video") -> ToggleState.AUDIO
-                            else -> null
-                        }
-                        return ToggleMatch(rect, state)
-                    }
-                }
-            }
-            for (i in 0 until node.childCount) {
-                queue.add(node.getChild(i))
-            }
-        }
-        return null
-    }
-
-    private fun findSpotifyToggleById(root: AccessibilityNodeInfo): ToggleMatch? {
-        val queue = ArrayDeque<AccessibilityNodeInfo?>()
-        queue.add(root)
-        val bounds = Rect()
-        val metrics = resources.displayMetrics
-        val padding = TOGGLE_PADDING_DP * metrics.density
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst() ?: continue
-            if (!node.isVisibleToUser) {
-                for (i in 0 until node.childCount) {
-                    queue.add(node.getChild(i))
-                }
-                continue
-            }
-            val viewId = node.viewIdResourceName.orEmpty()
-            val matched = SPOTIFY_ID_MATCHES.any { hint -> viewId.endsWith(hint) || viewId.contains(hint) }
-            if (matched) {
-                node.getBoundsInScreen(bounds)
-                if (!bounds.isEmpty) {
-                    var rect = RectF(bounds)
-                    rect.inset(-padding, -padding)
-                    rect = clampToScreen(rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                    rect = enrichWithParentBounds(node, rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                    return ToggleMatch(rect, null)
-                }
-            }
-            for (i in 0 until node.childCount) {
-                queue.add(node.getChild(i))
-            }
-        }
-        return null
-    }
-
-    private fun hasVisibleVideoNode(root: AccessibilityNodeInfo): Boolean {
-        val queue = ArrayDeque<AccessibilityNodeInfo?>()
-        queue.add(root)
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst() ?: continue
-            if (node.isVisibleToUser) {
-                val className = node.className?.toString().orEmpty()
-                val desc = node.contentDescription?.toString().orEmpty()
-                val text = node.text?.toString().orEmpty()
-                if (className.contains("video", true) || desc.contains("video", true) || text.contains("video", true)) {
-                    return true
-                }
-            }
-            for (i in 0 until node.childCount) {
-                queue.add(node.getChild(i))
-            }
-        }
-        return false
+    private fun handleSpotify(root: AccessibilityNodeInfo) {
+        val vm = isSpotifyVideoMode(root)
+        val hole = findSpotifyToggleRect(root) ?: defaultSpotifyToggleGuess(root)
+        OverlayBus.hole = hole
+        OverlayBus.maskEnabled = vm
+        Logx.d("UiDetectService.spotify video=$vm rect=$hole")
+        startService(IntentBuilder.show(this))
     }
 
     private fun defaultToggleGuess(root: AccessibilityNodeInfo): RectF {
@@ -276,6 +205,79 @@ class UiDetectService : AccessibilityService() {
         return false
     }
 
+    private fun collect(root: AccessibilityNodeInfo): Sequence<AccessibilityNodeInfo> = sequence {
+        val queue = ArrayDeque<AccessibilityNodeInfo?>()
+        queue.add(root)
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst() ?: continue
+            yield(node)
+            for (i in 0 until node.childCount) {
+                queue.add(node.getChild(i))
+            }
+        }
+    }
+
+    private fun findPipRectFor(pkg: String): RectF? {
+        val windows = windows ?: return null
+        if (windows.isEmpty()) return null
+        val dm = resources.displayMetrics
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+        val screenA = screenW.toFloat() * screenH.toFloat()
+        var best: RectF? = null
+        for (w in windows) {
+            val root = w.root ?: continue
+            val owner = root.packageName?.toString() ?: continue
+            if (owner != pkg) continue
+            val r = android.graphics.Rect()
+            w.getBoundsInScreen(r)
+            val rw = r.width().toFloat()
+            val rh = r.height().toFloat()
+            if (rw <= 0f || rh <= 0f) continue
+            val area = rw * rh
+            val isSmall = area <= screenA * 0.4f
+            if (!isSmall) continue
+            val rectf = RectF(r)
+            if (best == null || area < (best!!.width() * best!!.height())) best = rectf
+        }
+        return best
+    }
+
+    private fun isSpotifyVideoMode(root: AccessibilityNodeInfo): Boolean {
+        val hits = listOf("Video", "Show video", "Hide video")
+        return collect(root).any { n ->
+            val t = n.text?.toString().orEmpty()
+            val c = n.contentDescription?.toString().orEmpty()
+            hits.any { k -> t.contains(k, true) || c.contains(k, true) }
+        }
+    }
+
+    private fun findSpotifyToggleRect(root: AccessibilityNodeInfo): RectF? {
+        val nodes = collect(root).filter { n ->
+            val t = n.text?.toString().orEmpty()
+            val c = n.contentDescription?.toString().orEmpty()
+            val id = n.viewIdResourceName.orEmpty()
+            listOf("Video", "Show video", "Hide video").any { k -> t.contains(k, true) || c.contains(k, true) } ||
+                    id.endsWith(":id/video") || id.endsWith(":id/toggle") || id.endsWith(":id/switch")
+        }
+        val node = nodes.firstOrNull() ?: return null
+        val r = android.graphics.Rect()
+        node.getBoundsInScreen(r)
+        return RectF(r)
+    }
+
+    private fun defaultSpotifyToggleGuess(root: AccessibilityNodeInfo): RectF? {
+        val r = android.graphics.Rect()
+        root.getBoundsInScreen(r)
+        val w = r.width().toFloat()
+        val h = r.height().toFloat()
+        val holeW = w * 0.22f
+        val holeH = h * 0.12f
+        val left = w - holeW - (w * 0.04f)
+        val top = h * 0.12f
+        return RectF(left, top, left + holeW, top + holeH)
+    }
+
     private object IntentBuilder {
         fun show(context: AccessibilityService) = android.content.Intent(context, OverlayService::class.java).apply {
             action = OverlayService.ACTION_SHOW
@@ -293,27 +295,10 @@ class UiDetectService : AccessibilityService() {
             "switch to video"
         )
         private val EXACT_MATCHES = listOf("audio", "song", "video")
-        private val SPOTIFY_TEXT_MATCHES = listOf(
-            "video",
-            "show video",
-            "hide video",
-            "switch to video",
-            "switch to audio"
-        )
-        private val SPOTIFY_ID_MATCHES = listOf(
-            ":id/video",
-            ":id/player_video",
-            ":id/toggle",
-            ":id/switch"
-        )
         private val SUPPORTED_PACKAGES = setOf(
             YOUTUBE_PACKAGE,
             YOUTUBE_MUSIC_PACKAGE,
             SPOTIFY_PACKAGE
         )
     }
-
-    private data class ToggleMatch(val rect: RectF, val state: ToggleState?)
-
-    private enum class ToggleState { VIDEO, AUDIO }
 }
