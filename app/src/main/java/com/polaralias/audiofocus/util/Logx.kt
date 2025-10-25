@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.util
+package com.polaralias.audiofocus.util
 
 import android.util.Log
 

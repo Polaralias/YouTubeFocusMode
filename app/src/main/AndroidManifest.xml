@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
 
     <application
-        android:name="com.polaralias.ytfocus.AudioFocusApp"
+        android:name=".AudioFocusApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -18,7 +18,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AudioFocus">
         <activity
-            android:name="com.polaralias.ytfocus.MainActivity"
+            android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -27,18 +27,18 @@
         </activity>
 
         <activity
-            android:name="com.polaralias.ytfocus.DiagnosticsActivity"
+            android:name=".DiagnosticsActivity"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.polaralias.ytfocus.DIAGNOSTICS" />
+                <action android:name="com.polaralias.audiofocus.DIAGNOSTICS" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
-        <activity android:name="com.polaralias.ytfocus.admin.AdminActivity" />
+        <activity android:name=".admin.AdminActivity" />
 
         <receiver
-            android:name="com.polaralias.ytfocus.admin.YtDeviceAdminReceiver"
+            android:name=".admin.YtDeviceAdminReceiver"
             android:exported="true"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data
@@ -50,13 +50,13 @@
         </receiver>
 
         <service
-            android:name="com.polaralias.ytfocus.service.OverlayService"
+            android:name=".service.OverlayService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
         <service
-            android:name="com.polaralias.ytfocus.service.MediaListenerService"
+            android:name=".service.MediaListenerService"
             android:enabled="true"
             android:exported="false"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
@@ -67,7 +67,7 @@
         </service>
 
         <service
-            android:name="com.polaralias.ytfocus.service.UiDetectService"
+            android:name=".service.UiDetectService"
             android:enabled="true"
             android:exported="false"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

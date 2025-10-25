@@ -1,4 +1,4 @@
-package com.polaralias.ytfocus.util
+package com.polaralias.audiofocus.util
 
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager

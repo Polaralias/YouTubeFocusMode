@@ -1,12 +1,12 @@
-package com.polaralias.ytfocus
+package com.polaralias.audiofocus
 
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ShareCompat
-import com.polaralias.ytfocus.databinding.ActivityDiagnosticsBinding
-import com.polaralias.ytfocus.util.Logx
+import com.polaralias.audiofocus.databinding.ActivityDiagnosticsBinding
+import com.polaralias.audiofocus.util.Logx
 import java.io.File
 
 class DiagnosticsActivity : AppCompatActivity() {
