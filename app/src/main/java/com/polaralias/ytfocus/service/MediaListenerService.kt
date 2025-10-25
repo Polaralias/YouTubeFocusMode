@@ -5,44 +5,60 @@ import android.content.Intent
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import androidx.core.content.ContextCompat
-import com.polaralias.ytfocus.service.OverlayService
 import com.polaralias.ytfocus.media.MediaControllerStore
 import com.polaralias.ytfocus.util.ForegroundApp
+import com.polaralias.ytfocus.util.Logx
+import com.polaralias.ytfocus.util.PermissionStatus
+import com.polaralias.ytfocus.util.SafeServiceStarter
 
 class MediaListenerService : NotificationListenerService(),
     MediaSessionManager.OnActiveSessionsChangedListener {
 
     private lateinit var sessionManager: MediaSessionManager
     private var observedController: MediaController? = null
-    private val listenerComponent by lazy { ComponentName(this, MediaListenerService::class.java) }
+    private lateinit var listenerComponent: ComponentName
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
+            Logx.d("MediaListenerService.controllerCallback.onPlaybackStateChanged state=${state?.state}")
             evaluateControllers()
         }
+
         override fun onMetadataChanged(metadata: android.media.MediaMetadata?) {
+            Logx.d("MediaListenerService.controllerCallback.onMetadataChanged")
             evaluateControllers()
         }
+
         override fun onSessionDestroyed() {
+            Logx.d("MediaListenerService.controllerCallback.onSessionDestroyed")
             evaluateControllers()
         }
     }
 
     override fun onCreate() {
+        Logx.d("MediaListenerService.onCreate sdk=${Build.VERSION.SDK_INT}")
         super.onCreate()
         sessionManager = getSystemService(MediaSessionManager::class.java)
+        listenerComponent = ComponentName(this, MediaListenerService::class.java)
+    }
+
+    override fun onDestroy() {
+        Logx.d("MediaListenerService.onDestroy")
+        super.onDestroy()
     }
 
     override fun onListenerConnected() {
+        Logx.d("MediaListenerService.onListenerConnected")
         super.onListenerConnected()
         sessionManager.addOnActiveSessionsChangedListener(this, listenerComponent)
         evaluateControllers()
     }
 
     override fun onListenerDisconnected() {
+        Logx.d("MediaListenerService.onListenerDisconnected")
         super.onListenerDisconnected()
         sessionManager.removeOnActiveSessionsChangedListener(this)
         updateController(null)
@@ -50,22 +66,30 @@ class MediaListenerService : NotificationListenerService(),
     }
 
     override fun onActiveSessionsChanged(controllers: MutableList<MediaController>?) {
+        Logx.d("MediaListenerService.onActiveSessionsChanged size=${controllers?.size}")
         evaluateControllers()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        Logx.d("MediaListenerService.onNotificationPosted package=${sbn?.packageName}")
         super.onNotificationPosted(sbn)
         evaluateControllers()
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        Logx.d("MediaListenerService.onNotificationRemoved package=${sbn?.packageName}")
         super.onNotificationRemoved(sbn)
         evaluateControllers()
     }
 
     private fun evaluateControllers() {
         val controllers = sessionManager.getActiveSessions(listenerComponent) ?: emptyList()
+        Logx.d("MediaListenerService.evaluateControllers count=${controllers.size}")
+        controllers.forEach { controller ->
+            Logx.d("MediaListenerService.evaluateControllers controller=${controller.packageName} state=${controller.playbackState?.state}")
+        }
         val target = controllers.firstOrNull { isTargetActive(it) }
+        Logx.d("MediaListenerService.evaluateControllers selected=${target?.packageName}")
         if (target != null) {
             updateController(target)
             MediaControllerStore.setController(target)
@@ -79,31 +103,39 @@ class MediaListenerService : NotificationListenerService(),
 
     private fun isTargetActive(controller: MediaController): Boolean {
         val pkg = controller.packageName
-        if (pkg != YOUTUBE && pkg != YOUTUBE_MUSIC) return false
-        if (controller.playbackState?.state != PlaybackState.STATE_PLAYING) return false
-        if (!ForegroundApp.isForeground(this, pkg)) return false
-        return true
+        val state = controller.playbackState?.state
+        val active = (pkg == YOUTUBE || pkg == YOUTUBE_MUSIC) && state == PlaybackState.STATE_PLAYING && ForegroundApp.isForeground(this, pkg)
+        Logx.d("MediaListenerService.isTargetActive package=$pkg state=$state active=$active")
+        return active
     }
 
     private fun updateController(controller: MediaController?) {
-        if (controller == observedController) return
+        if (controller == observedController) {
+            Logx.d("MediaListenerService.updateController unchanged=${controller?.packageName}")
+            return
+        }
+        Logx.d("MediaListenerService.updateController from=${observedController?.packageName} to=${controller?.packageName}")
         observedController?.unregisterCallback(controllerCallback)
         observedController = controller
         controller?.registerCallback(controllerCallback)
     }
 
     private fun sendShow() {
+        val snapshot = PermissionStatus.snapshot(this)
+        Logx.d("MediaListenerService.sendShow overlay=${snapshot.overlay} notification=${snapshot.notificationListener} usage=${snapshot.usageAccess} accessibility=${snapshot.accessibility}")
         val intent = Intent(this, OverlayService::class.java).apply {
             action = OverlayService.ACTION_SHOW
         }
-        ContextCompat.startForegroundService(this, intent)
+        SafeServiceStarter.startFg(this, intent)
     }
 
     private fun sendHide() {
+        val snapshot = PermissionStatus.snapshot(this)
+        Logx.d("MediaListenerService.sendHide overlay=${snapshot.overlay} notification=${snapshot.notificationListener} usage=${snapshot.usageAccess} accessibility=${snapshot.accessibility}")
         val intent = Intent(this, OverlayService::class.java).apply {
             action = OverlayService.ACTION_HIDE
         }
-        ContextCompat.startForegroundService(this, intent)
+        SafeServiceStarter.startFg(this, intent)
     }
 
     companion object {

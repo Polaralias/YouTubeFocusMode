@@ -18,6 +18,7 @@ object ForegroundApp {
 
     @Synchronized
     fun isForeground(context: Context, packageName: String): Boolean {
+        Logx.d("ForegroundApp.isForeground start package=$packageName")
         val manager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return false
         val end = System.currentTimeMillis()
         val startHint = if (lastEventTimestamp != 0L) lastEventTimestamp else end - DEFAULT_WINDOW_MS
@@ -53,6 +54,8 @@ object ForegroundApp {
         if (newestTimestamp > lastEventTimestamp) {
             lastEventTimestamp = newestTimestamp
         }
-        return cachedForegroundPackage == packageName
+        val result = cachedForegroundPackage == packageName
+        Logx.d("ForegroundApp.isForeground result package=$packageName cached=$cachedForegroundPackage result=$result")
+        return result
     }
 }
