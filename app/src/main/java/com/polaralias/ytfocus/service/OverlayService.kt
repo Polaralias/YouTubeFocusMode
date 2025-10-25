@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.RectF
+import android.hardware.display.DisplayManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
@@ -17,6 +18,8 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
+import android.view.ContextThemeWrapper
+import android.view.Display
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -49,6 +52,7 @@ class OverlayService : Service() {
     }
 
     private var windowManager: WindowManager? = null
+    private var overlayContext: Context? = null
     private var overlayView: View? = null
     private var holeView: HoleOverlayView? = null
     private var playPauseButton: ImageButton? = null
@@ -105,7 +109,6 @@ class OverlayService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification())
         }
         Logx.d("OverlayService.onCreate startForeground complete")
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         MediaControllerStore.addListener(controllerListener)
         OverlayBus.addListener(holeListener)
     }
@@ -157,7 +160,8 @@ class OverlayService : Service() {
         }
         if (overlayView == null) {
             Logx.d("OverlayService.showOverlay inflate view")
-            val inflater = LayoutInflater.from(this)
+            val context = obtainOverlayContext()
+            val inflater = LayoutInflater.from(context)
             val view = inflater.inflate(R.layout.service_overlay, null)
             overlayView = view
             holeView = view.findViewById(R.id.holeView)
@@ -177,7 +181,10 @@ class OverlayService : Service() {
                 PixelFormat.TRANSLUCENT
             )
             params.gravity = Gravity.TOP or Gravity.START
-            windowManager?.addView(view, params)
+            val manager = (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).also {
+                windowManager = it
+            }
+            manager.addView(view, params)
             Logx.d("OverlayService.showOverlay view added")
         }
         attachController(MediaControllerStore.getController())
@@ -203,6 +210,8 @@ class OverlayService : Service() {
         elapsedLabel = null
         totalLabel = null
         seekBar = null
+        windowManager = null
+        overlayContext = null
     }
 
     private fun configureControls() {
@@ -245,6 +254,28 @@ class OverlayService : Service() {
                 }
             }
         })
+    }
+
+    private fun obtainOverlayContext(): Context {
+        overlayContext?.let { return it }
+
+        val baseContext = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                val displayManager = getSystemService(DisplayManager::class.java)
+                @Suppress("DEPRECATION")
+                val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+                if (display != null) {
+                    createWindowContext(display, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
+                } else {
+                    createConfigurationContext(resources.configuration)
+                }
+            }
+            else -> createConfigurationContext(resources.configuration)
+        }
+
+        val themedContext = ContextThemeWrapper(baseContext, R.style.Theme_YTFocus)
+        overlayContext = themedContext
+        return themedContext
     }
 
     private fun attachController(controller: MediaController?) {
