@@ -23,6 +23,7 @@ class UiDetectService : AccessibilityService() {
         val pkg = event?.packageName?.toString() ?: root.packageName?.toString() ?: return
         Logx.d("UiDetectService.onAccessibilityEvent package=$pkg type=${event?.eventType}")
         if (!SUPPORTED_PACKAGES.contains(pkg)) {
+            OverlayBus.clearUiDetection()
             return
         }
 
@@ -30,31 +31,41 @@ class UiDetectService : AccessibilityService() {
         val activeFromTarget = controller?.packageName == pkg && controller.playbackState?.state == PlaybackState.STATE_PLAYING
         if (!activeFromTarget) {
             OverlayBus.pipRect = null
+            OverlayBus.clearUiDetection()
             return
         }
 
         val pip = findPipRectFor(pkg)
         if (pip != null) {
             OverlayBus.pipRect = pip
+            var shouldShow = false
             when (pkg) {
                 YOUTUBE_PACKAGE -> {
                     OverlayBus.hole = null
                     OverlayBus.maskEnabled = true
+                    shouldShow = true
                 }
                 YOUTUBE_MUSIC_PACKAGE -> {
                     val isAudio = isAudioMode(root)
                     val hole = findAudioToggleRect(root) ?: defaultToggleGuess(root)
                     OverlayBus.hole = hole
                     OverlayBus.maskEnabled = !isAudio
+                    shouldShow = true
                 }
                 SPOTIFY_PACKAGE -> {
                     val vm = isSpotifyVideoMode(root)
                     val hole = findSpotifyToggleRect(root) ?: defaultSpotifyToggleGuess(root)
                     OverlayBus.hole = hole
                     OverlayBus.maskEnabled = vm
+                    shouldShow = true
                 }
             }
-            startService(IntentBuilder.show(this))
+            if (shouldShow) {
+                OverlayBus.markUiDetection()
+                startService(IntentBuilder.show(this))
+            } else {
+                OverlayBus.clearUiDetection()
+            }
             return
         } else {
             OverlayBus.pipRect = null
@@ -62,17 +73,30 @@ class UiDetectService : AccessibilityService() {
 
         val inForeground = ForegroundApp.isTargetInForeground(this)
         if (!inForeground) {
-            return
+            Logx.d("UiDetectService.onAccessibilityEvent not detected in foreground via usage stats")
         }
 
+        var shouldShow = false
         when (pkg) {
             YOUTUBE_PACKAGE -> {
                 OverlayBus.maskEnabled = true
                 OverlayBus.hole = null
-                startService(IntentBuilder.show(this))
+                shouldShow = true
             }
-            YOUTUBE_MUSIC_PACKAGE -> handleYtMusic(root)
-            SPOTIFY_PACKAGE -> handleSpotify(root)
+            YOUTUBE_MUSIC_PACKAGE -> {
+                handleYtMusic(root)
+                shouldShow = true
+            }
+            SPOTIFY_PACKAGE -> {
+                handleSpotify(root)
+                shouldShow = true
+            }
+        }
+        if (shouldShow) {
+            OverlayBus.markUiDetection()
+            startService(IntentBuilder.show(this))
+        } else {
+            OverlayBus.clearUiDetection()
         }
     }
 
@@ -85,7 +109,6 @@ class UiDetectService : AccessibilityService() {
         OverlayBus.hole = rect
         val audio = isAudioMode(root)
         OverlayBus.maskEnabled = !audio
-        startService(IntentBuilder.show(this))
     }
 
     private fun handleSpotify(root: AccessibilityNodeInfo) {
@@ -101,7 +124,6 @@ class UiDetectService : AccessibilityService() {
         OverlayBus.hole = rect
         OverlayBus.maskEnabled = videoMode
         Logx.d("UiDetectService.spotify video=$videoMode rect=$rect")
-        startService(IntentBuilder.show(this))
     }
 
     private fun findPipRectFor(pkg: String): RectF? {
