@@ -1,6 +1,6 @@
-# YT Focus
+# YouTube Focus Mode
 
-YT Focus blocks distracting YouTube video playback by masking the screen while leaving audio controls accessible.
+YouTube Focus Mode blocks distracting YouTube video playback by masking the screen while leaving audio controls accessible.
 
 ## First run checklist
 
