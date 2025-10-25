@@ -60,6 +60,12 @@ object ForegroundApp {
     }
 
     fun isTargetInForeground(context: Context): Boolean {
-        return isForeground(context, "com.google.android.youtube") || isForeground(context, "com.google.android.apps.youtube.music")
+        return TARGET_PACKAGES.any { pkg -> isForeground(context, pkg) }
     }
+
+    private val TARGET_PACKAGES = setOf(
+        "com.google.android.youtube",
+        "com.google.android.apps.youtube.music",
+        "com.spotify.music"
+    )
 }

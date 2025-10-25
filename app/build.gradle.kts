@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.polaralias.ytfocus"
+    namespace = "com.polaralias.audiofocus"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.polaralias.ytfocus"
+        applicationId = "com.polaralias.audiofocus"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

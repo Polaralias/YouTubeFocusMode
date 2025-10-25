@@ -148,9 +148,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun logRunbook() {
         Logx.i("adb install -r app/build/outputs/apk/debug/app-debug.apk")
-        Logx.i("adb logcat -v time -s YTFocus ActivityManager PackageManager")
-        Logx.i("adb logcat -v time | grep YTFocus")
-        Logx.i("adb shell run-as com.polaralias.ytfocus cat files/crash/latest_crash.txt")
+        Logx.i("adb logcat -v time -s AudioFocus ActivityManager PackageManager")
+        Logx.i("adb logcat -v time | grep AudioFocus")
+        Logx.i("adb shell run-as com.polaralias.audiofocus cat files/crash/latest_crash.txt")
     }
 
     companion object {
