@@ -1,5 +1,6 @@
 package com.polaralias.ytfocus.service
 
+import android.content.ComponentName
 import android.content.Intent
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -7,22 +8,24 @@ import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.content.ContextCompat
+import com.polaralias.ytfocus.OverlayService
 import com.polaralias.ytfocus.media.MediaControllerStore
 import com.polaralias.ytfocus.util.ForegroundApp
 
-class MediaListenerService : NotificationListenerService(), MediaSessionManager.OnActiveSessionsChangedListener {
+class MediaListenerService : NotificationListenerService(),
+    MediaSessionManager.OnActiveSessionsChangedListener {
+
     private lateinit var sessionManager: MediaSessionManager
     private var observedController: MediaController? = null
+    private val listenerComponent by lazy { ComponentName(this, MediaListenerService::class.java) }
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
             evaluateControllers()
         }
-
         override fun onMetadataChanged(metadata: android.media.MediaMetadata?) {
             evaluateControllers()
         }
-
         override fun onSessionDestroyed() {
             evaluateControllers()
         }
@@ -35,7 +38,7 @@ class MediaListenerService : NotificationListenerService(), MediaSessionManager.
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        sessionManager.addOnActiveSessionsChangedListener(this, componentName)
+        sessionManager.addOnActiveSessionsChangedListener(this, listenerComponent)
         evaluateControllers()
     }
 
@@ -61,7 +64,7 @@ class MediaListenerService : NotificationListenerService(), MediaSessionManager.
     }
 
     private fun evaluateControllers() {
-        val controllers = sessionManager.getActiveSessions(componentName) ?: emptyList()
+        val controllers = sessionManager.getActiveSessions(listenerComponent) ?: emptyList()
         val target = controllers.firstOrNull { isTargetActive(it) }
         if (target != null) {
             updateController(target)
@@ -75,38 +78,31 @@ class MediaListenerService : NotificationListenerService(), MediaSessionManager.
     }
 
     private fun isTargetActive(controller: MediaController): Boolean {
-        val packageName = controller.packageName
-        if (packageName != YOUTUBE && packageName != YOUTUBE_MUSIC) {
-            return false
-        }
-        val state = controller.playbackState?.state
-        if (state != PlaybackState.STATE_PLAYING) {
-            return false
-        }
-        if (!ForegroundApp.isForeground(this, packageName)) {
-            return false
-        }
+        val pkg = controller.packageName
+        if (pkg != YOUTUBE && pkg != YOUTUBE_MUSIC) return false
+        if (controller.playbackState?.state != PlaybackState.STATE_PLAYING) return false
+        if (!ForegroundApp.isForeground(this, pkg)) return false
         return true
     }
 
     private fun updateController(controller: MediaController?) {
-        if (controller == observedController) {
-            return
-        }
+        if (controller == observedController) return
         observedController?.unregisterCallback(controllerCallback)
         observedController = controller
         controller?.registerCallback(controllerCallback)
     }
 
     private fun sendShow() {
-        val intent = Intent(this, OverlayService::class.java)
-        intent.action = OverlayService.ACTION_SHOW
+        val intent = Intent(this, OverlayService::class.java).apply {
+            action = OverlayService.ACTION_SHOW
+        }
         ContextCompat.startForegroundService(this, intent)
     }
 
     private fun sendHide() {
-        val intent = Intent(this, OverlayService::class.java)
-        intent.action = OverlayService.ACTION_HIDE
+        val intent = Intent(this, OverlayService::class.java).apply {
+            action = OverlayService.ACTION_HIDE
+        }
         ContextCompat.startForegroundService(this, intent)
     }
 
