@@ -242,30 +242,11 @@ class OverlayService : Service() {
         return params
     }
 
-    private fun overlayParamsForRect(r: RectF): WindowManager.LayoutParams {
-        val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
-        return WindowManager.LayoutParams(
-            r.width().toInt().coerceAtLeast(1),
-            r.height().toInt().coerceAtLeast(1),
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = r.left.toInt()
-            y = r.top.toInt()
-            if (Build.VERSION.SDK_INT >= 28) {
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
-            }
-        }
-    }
-
     private fun applyBounds() {
         ensureBlockView()
         val manager = windowManager ?: return
         val view = blockView ?: return
-        val pip = OverlayBus.pipRect
-        val lp = if (pip != null) overlayParamsForRect(pip) else overlayParams(true)
+        val lp = overlayParams(true)
         if (!currentMaskEnabled) {
             lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
