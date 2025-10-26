@@ -5,4 +5,4 @@
     android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="50"
-    android:packageNames="com.google.android.youtube,com.google.android.apps.youtube.music,com.spotify.music" />
+    android:packageNames="com.google.android.youtube,org.schabi.newpipe,com.google.android.apps.youtube.music,com.spotify.music" />
