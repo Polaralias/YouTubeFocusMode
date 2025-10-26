@@ -10,6 +10,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.polaralias.audiofocus.bus.OverlayBus
 import com.polaralias.audiofocus.media.MediaControllerStore
+import com.polaralias.audiofocus.media.isActivelyPlaying
 import com.polaralias.audiofocus.util.ForegroundApp
 import com.polaralias.audiofocus.util.Logx
 import com.polaralias.audiofocus.util.PermissionStatus
@@ -109,7 +110,7 @@ class MediaListenerService : NotificationListenerService(),
             "MediaListenerService.evaluateControllers visibility pkg=$pkg foreground=$foreground hasPip=$hasPip uiDetect=$hasUiDetection"
         )
         val shouldShow = when {
-            target != null -> foreground || hasPip || hasUiDetection
+            target != null -> true
             detectionActive -> true
             else -> false
         }
@@ -122,20 +123,13 @@ class MediaListenerService : NotificationListenerService(),
 
     private fun isTargetActive(controller: MediaController): Boolean {
         val pkg = controller.packageName
-        val state = controller.playbackState?.state
+        val playbackState = controller.playbackState
         val target = TARGET_PACKAGES.contains(pkg)
-        val active = target && isActiveState(state)
-        Logx.d("MediaListenerService.isTargetActive package=$pkg state=$state active=$active")
+        val active = target && playbackState.isActivelyPlaying()
+        Logx.d(
+            "MediaListenerService.isTargetActive package=$pkg state=${playbackState?.state} speed=${playbackState?.playbackSpeed} active=$active"
+        )
         return active
-    }
-
-    private fun isActiveState(state: Int?): Boolean {
-        return when (state) {
-            PlaybackState.STATE_PLAYING,
-            PlaybackState.STATE_BUFFERING,
-            PlaybackState.STATE_CONNECTING -> true
-            else -> false
-        }
     }
 
     private fun updateController(controller: MediaController?) {

@@ -3,12 +3,13 @@ package com.polaralias.audiofocus.service
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
 import android.graphics.RectF
-import android.media.session.PlaybackState
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.polaralias.audiofocus.bus.OverlayBus
 import com.polaralias.audiofocus.media.MediaControllerStore
+import com.polaralias.audiofocus.media.isActivelyPlaying
+import com.polaralias.audiofocus.media.isExplicitlyInactive
 import com.polaralias.audiofocus.util.ForegroundApp
 import com.polaralias.audiofocus.util.Logx
 import kotlin.math.max
@@ -29,9 +30,13 @@ class UiDetectService : AccessibilityService() {
         }
 
         val controller = OverlayService.mediaController ?: MediaControllerStore.getController()
-        val activeFromTarget = controller?.packageName == pkg && isActivePlaybackState(controller.playbackState?.state)
+        val controllerForPkg = controller?.takeIf { it.packageName == pkg }
+        val playbackState = controllerForPkg?.playbackState
+        val explicitlyInactive = playbackState.isExplicitlyInactive()
+        val activeFromTarget = playbackState.isActivelyPlaying()
         val activeFromUi = when {
             activeFromTarget -> false
+            explicitlyInactive -> false
             pkg == YOUTUBE_PACKAGE || pkg == NEWPIPE_PACKAGE -> isYoutubePlaybackVisible(root)
             else -> false
         }
@@ -430,15 +435,6 @@ class UiDetectService : AccessibilityService() {
         val right = rect.right.coerceIn(left, screenWidth)
         val bottom = rect.bottom.coerceIn(top, screenHeight)
         return RectF(left, top, right, bottom)
-    }
-
-    private fun isActivePlaybackState(state: Int?): Boolean {
-        return when (state) {
-            PlaybackState.STATE_PLAYING,
-            PlaybackState.STATE_BUFFERING,
-            PlaybackState.STATE_CONNECTING -> true
-            else -> false
-        }
     }
 
     private fun isAudioMode(root: AccessibilityNodeInfo): Boolean {

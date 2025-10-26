@@ -33,6 +33,7 @@ import com.polaralias.audiofocus.HoleOverlayView
 import com.polaralias.audiofocus.R
 import com.polaralias.audiofocus.bus.OverlayBus
 import com.polaralias.audiofocus.media.MediaControllerStore
+import com.polaralias.audiofocus.media.isActivelyPlaying
 import com.polaralias.audiofocus.util.Logx
 
 class OverlayService : Service() {
@@ -305,9 +306,10 @@ class OverlayService : Service() {
             currentController?.transportControls?.skipToNext()
         }
         playPauseButton?.setOnClickListener {
-            val state = currentController?.playbackState?.state
-            Logx.d("OverlayService.playPauseButton click state=$state")
-            if (state == PlaybackState.STATE_PLAYING) {
+            val playbackState = currentController?.playbackState
+            val isPlaying = playbackState.isActivelyPlaying()
+            Logx.d("OverlayService.playPauseButton click state=${playbackState?.state} speed=${playbackState?.playbackSpeed} playing=$isPlaying")
+            if (isPlaying) {
                 currentController?.transportControls?.pause()
             } else {
                 currentController?.transportControls?.play()
@@ -390,15 +392,16 @@ class OverlayService : Service() {
             hideOverlay()
             return
         }
-        val state = controller.playbackState?.state
-        Logx.d("OverlayService.updateState package=${controller.packageName} state=$state canDraw=${Settings.canDrawOverlays(this)}")
-        if (state == PlaybackState.STATE_PLAYING) {
+        val playbackState = controller.playbackState
+        val isPlaying = playbackState.isActivelyPlaying()
+        Logx.d("OverlayService.updateState package=${controller.packageName} state=${playbackState?.state} speed=${playbackState?.playbackSpeed} playing=$isPlaying canDraw=${Settings.canDrawOverlays(this)}")
+        if (isPlaying) {
             handler.removeCallbacks(ticker)
             handler.post(ticker)
         } else {
             handler.removeCallbacks(ticker)
         }
-        if (state == PlaybackState.STATE_PLAYING) {
+        if (isPlaying) {
             playPauseButton?.setImageResource(R.drawable.ic_pause)
             playPauseButton?.contentDescription = getString(R.string.media_pause)
         } else {
