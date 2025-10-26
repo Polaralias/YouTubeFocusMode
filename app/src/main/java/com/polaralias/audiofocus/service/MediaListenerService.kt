@@ -119,9 +119,18 @@ class MediaListenerService : NotificationListenerService(),
         val pkg = controller.packageName
         val state = controller.playbackState?.state
         val target = TARGET_PACKAGES.contains(pkg)
-        val active = target && state == PlaybackState.STATE_PLAYING
+        val active = target && isActiveState(state)
         Logx.d("MediaListenerService.isTargetActive package=$pkg state=$state active=$active")
         return active
+    }
+
+    private fun isActiveState(state: Int?): Boolean {
+        return when (state) {
+            PlaybackState.STATE_PLAYING,
+            PlaybackState.STATE_BUFFERING,
+            PlaybackState.STATE_CONNECTING -> true
+            else -> false
+        }
     }
 
     private fun updateController(controller: MediaController?) {

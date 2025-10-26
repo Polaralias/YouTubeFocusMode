@@ -29,7 +29,7 @@ class UiDetectService : AccessibilityService() {
         }
 
         val controller = OverlayService.mediaController ?: MediaControllerStore.getController()
-        val activeFromTarget = controller?.packageName == pkg && controller.playbackState?.state == PlaybackState.STATE_PLAYING
+        val activeFromTarget = controller?.packageName == pkg && isActivePlaybackState(controller.playbackState?.state)
         if (!activeFromTarget) {
             OverlayBus.pipRect = null
             OverlayBus.clearUiDetection()
@@ -393,6 +393,15 @@ class UiDetectService : AccessibilityService() {
         val right = rect.right.coerceIn(left, screenWidth)
         val bottom = rect.bottom.coerceIn(top, screenHeight)
         return RectF(left, top, right, bottom)
+    }
+
+    private fun isActivePlaybackState(state: Int?): Boolean {
+        return when (state) {
+            PlaybackState.STATE_PLAYING,
+            PlaybackState.STATE_BUFFERING,
+            PlaybackState.STATE_CONNECTING -> true
+            else -> false
+        }
     }
 
     private fun isAudioMode(root: AccessibilityNodeInfo): Boolean {
