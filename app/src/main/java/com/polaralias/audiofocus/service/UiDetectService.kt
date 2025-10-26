@@ -30,7 +30,13 @@ class UiDetectService : AccessibilityService() {
 
         val controller = OverlayService.mediaController ?: MediaControllerStore.getController()
         val activeFromTarget = controller?.packageName == pkg && isActivePlaybackState(controller.playbackState?.state)
-        if (!activeFromTarget) {
+        val activeFromUi = when {
+            activeFromTarget -> false
+            pkg == YOUTUBE_PACKAGE || pkg == NEWPIPE_PACKAGE -> isYoutubePlaybackVisible(root)
+            else -> false
+        }
+        val playbackActive = activeFromTarget || activeFromUi
+        if (!playbackActive) {
             OverlayBus.pipRect = null
             OverlayBus.clearUiDetection()
             return
@@ -70,11 +76,6 @@ class UiDetectService : AccessibilityService() {
             return
         } else {
             OverlayBus.pipRect = null
-        }
-
-        if (!activeFromTarget) {
-            OverlayBus.clearUiDetection()
-            return
         }
 
         val inForeground = ForegroundApp.isTargetInForeground(this)
@@ -292,6 +293,42 @@ class UiDetectService : AccessibilityService() {
         return false
     }
 
+    private fun isYoutubePlaybackVisible(root: AccessibilityNodeInfo): Boolean {
+        val queue = ArrayDeque<AccessibilityNodeInfo?>()
+        queue.add(root)
+        val bounds = Rect()
+        val metrics = resources.displayMetrics
+        val minWidth = metrics.widthPixels * 0.4f
+        val minHeight = metrics.heightPixels * 0.3f
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst() ?: continue
+            val className = node.className?.toString().orEmpty()
+            val id = node.viewIdResourceName.orEmpty().lowercase()
+            val desc = node.contentDescription?.toString().orEmpty().lowercase()
+            val text = node.text?.toString().orEmpty().lowercase()
+            if (node.isVisibleToUser) {
+                if (YOUTUBE_SURFACE_CLASSES.any { className.contains(it, ignoreCase = true) }) {
+                    node.getBoundsInScreen(bounds)
+                    if (!bounds.isEmpty && bounds.width() >= minWidth && bounds.height() >= minHeight) {
+                        return true
+                    }
+                }
+                val combined = buildString {
+                    if (id.isNotBlank()) append(id)
+                    if (desc.isNotBlank()) append(' ').append(desc)
+                    if (text.isNotBlank()) append(' ').append(text)
+                }
+                if (combined.isNotBlank() && YOUTUBE_VIDEO_MATCHES.any { combined.contains(it) }) {
+                    return true
+                }
+            }
+            for (i in 0 until node.childCount) {
+                queue.add(node.getChild(i))
+            }
+        }
+        return false
+    }
+
     private fun collect(root: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> {
         val result = ArrayList<AccessibilityNodeInfo>()
         val queue = ArrayDeque<AccessibilityNodeInfo?>()
@@ -459,6 +496,19 @@ class UiDetectService : AccessibilityService() {
             NEWPIPE_PACKAGE,
             YOUTUBE_MUSIC_PACKAGE,
             SPOTIFY_PACKAGE
+        )
+        private val YOUTUBE_SURFACE_CLASSES = listOf(
+            "SurfaceView",
+            "TextureView",
+            "PlayerView"
+        )
+        private val YOUTUBE_VIDEO_MATCHES = listOf(
+            "video_player",
+            "watch_player",
+            "shorts",
+            "shorts player",
+            "video player",
+            "player_view"
         )
     }
 
