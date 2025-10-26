@@ -10,57 +10,50 @@ object ForegroundApp {
         UsageEvents.Event.MOVE_TO_FOREGROUND,
         UsageEvents.Event.ACTIVITY_RESUMED
     )
-    private val DEFAULT_WINDOW_MS = TimeUnit.MINUTES.toMillis(5)
-    private val FALLBACK_WINDOW_MS = TimeUnit.DAYS.toMillis(1)
+    private val WINDOW_MS = TimeUnit.MINUTES.toMillis(1)
+    private var cachedTopPackage: String? = null
+    private var cachedTimestamp: Long = 0
 
-    private var lastEventTimestamp = 0L
-    private var cachedForegroundPackage: String? = null
+    @Synchronized
+    fun topPackage(context: Context): String? {
+        val manager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+        val now = System.currentTimeMillis()
+        if (manager == null) {
+            return cachedWithinWindow(now)
+        }
+        val start = now - WINDOW_MS
+        val events = manager.queryEvents(start, now)
+        val event = UsageEvents.Event()
+        var latestPackage: String? = null
+        var latestTimestamp = Long.MIN_VALUE
+        while (events != null && events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.timeStamp >= start && FOREGROUND_EVENTS.contains(event.eventType)) {
+                if (event.timeStamp >= latestTimestamp) {
+                    latestTimestamp = event.timeStamp
+                    latestPackage = event.packageName
+                }
+            }
+        }
+        if (latestPackage != null) {
+            cachedTopPackage = latestPackage
+            cachedTimestamp = latestTimestamp
+            return latestPackage
+        }
+        return cachedWithinWindow(now)
+    }
 
     @Synchronized
     fun isForeground(context: Context, packageName: String): Boolean {
-        Logx.d("ForegroundApp.isForeground start package=$packageName")
-        val manager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return false
-        val end = System.currentTimeMillis()
-        val startHint = if (lastEventTimestamp != 0L) lastEventTimestamp else end - DEFAULT_WINDOW_MS
-        val event = UsageEvents.Event()
-        var newestTimestamp = lastEventTimestamp
-        var updatedCache = false
-
-        fun scan(start: Long) {
-            val startBounded = start.coerceAtLeast(0L).coerceAtMost(end)
-            val events = manager.queryEvents(startBounded, end)
-            while (events != null && events.hasNextEvent()) {
-                events.getNextEvent(event)
-                if (event.timeStamp > newestTimestamp) {
-                    newestTimestamp = event.timeStamp
-                }
-                if (FOREGROUND_EVENTS.contains(event.eventType)) {
-                    cachedForegroundPackage = event.packageName
-                    updatedCache = true
-                }
-            }
-        }
-
-        scan(startHint)
-
-        if (!updatedCache && cachedForegroundPackage == null) {
-            val fallbackStart = end - FALLBACK_WINDOW_MS
-            if (fallbackStart < startHint) {
-                scan(fallbackStart)
-            } else if (!updatedCache) {
-                scan(fallbackStart)
-            }
-        }
-        if (newestTimestamp > lastEventTimestamp) {
-            lastEventTimestamp = newestTimestamp
-        }
-        val result = cachedForegroundPackage == packageName
-        Logx.d("ForegroundApp.isForeground result package=$packageName cached=$cachedForegroundPackage result=$result")
-        return result
+        return topPackage(context) == packageName
     }
 
     fun isTargetInForeground(context: Context): Boolean {
         return TARGET_PACKAGES.any { pkg -> isForeground(context, pkg) }
+    }
+
+    private fun cachedWithinWindow(now: Long): String? {
+        return if (now - cachedTimestamp <= WINDOW_MS) cachedTopPackage else null
     }
 
     private val TARGET_PACKAGES = setOf(

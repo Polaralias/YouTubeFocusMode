@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 object OverlayStateStore {
     private val ref = AtomicReference(OverlayState())
+    fun get(): OverlayState = ref.get()
     fun update(ctx: Context, next: OverlayState) {
         val prev = ref.get()
         if (prev == next) return
@@ -14,5 +15,4 @@ object OverlayStateStore {
             action = com.polaralias.audiofocus.service.OverlayService.ACTION_UPDATE
         })
     }
-    fun get(): OverlayState = ref.get()
 }

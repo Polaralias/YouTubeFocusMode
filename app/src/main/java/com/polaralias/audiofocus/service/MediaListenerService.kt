@@ -22,6 +22,7 @@ class MediaListenerService : NotificationListenerService(),
     private lateinit var sessionManager: MediaSessionManager
     private var observedController: MediaController? = null
     private lateinit var listenerComponent: ComponentName
+    private var overlayShown = false
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
@@ -65,7 +66,7 @@ class MediaListenerService : NotificationListenerService(),
         sessionManager.removeOnActiveSessionsChangedListener(this)
         updateController(null)
         MediaControllerStore.setController(null)
-        publishInactive()
+        publishController(null, false)
     }
 
     override fun onActiveSessionsChanged(controllers: MutableList<MediaController>?) {
@@ -91,37 +92,40 @@ class MediaListenerService : NotificationListenerService(),
         controllers.forEach { controller ->
             Logx.d("MediaListenerService.evaluateControllers controller=${controller.packageName} state=${controller.playbackState?.state}")
         }
-        val active = controllers.firstOrNull { isActive(it) }
-        Logx.d("MediaListenerService.evaluateControllers selected=${active?.packageName}")
-        if (active != null) {
-            updateController(active)
-            MediaControllerStore.setController(active)
-            publishActive(active.packageName)
-        } else {
-            updateController(null)
-            MediaControllerStore.setController(null)
-            publishInactive()
+        val state = OverlayStateStore.get()
+        val pipKind = if (state.mode == PlayMode.PIP) state.app else AppKind.NONE
+        val filtered = controllers.filter { appKind(it.packageName) != AppKind.NONE }
+        val topPackage = ForegroundApp.topPackage(this)
+        var chosen: MediaController? = null
+        for (controller in filtered) {
+            val pkg = controller.packageName
+            val kind = appKind(pkg)
+            val playbackState = controller.playbackState?.state
+            val playingLike = playbackState == PlaybackState.STATE_PLAYING || playbackState == PlaybackState.STATE_BUFFERING
+            val foreground = ForegroundApp.isForeground(this, pkg)
+            val pip = kind != AppKind.NONE && pipKind == kind
+            if (playingLike && (foreground || pip)) {
+                chosen = controller
+                break
+            }
         }
-    }
-
-    private fun isActive(controller: MediaController): Boolean {
-        val pkg = controller.packageName
-        val target = pkg == "com.google.android.youtube" || pkg == "com.google.android.apps.youtube.music" || pkg == "com.spotify.music"
-        if (!target) {
-            Logx.d("MediaListenerService.isActive package=$pkg target=$target")
-            return false
+        if (chosen == null && topPackage != null) {
+            chosen = filtered.firstOrNull { it.packageName == topPackage }
         }
-        val state = controller.playbackState?.state
-        val playingLike = state == PlaybackState.STATE_PLAYING || state == PlaybackState.STATE_BUFFERING
-        if (!playingLike) {
-            Logx.d("MediaListenerService.isActive package=$pkg state=$state playingLike=$playingLike")
-            return false
+        if (chosen == null) {
+            chosen = filtered.firstOrNull()
         }
-        if (!ForegroundApp.isForeground(this, pkg)) {
-            Logx.d("MediaListenerService.isActive package=$pkg foreground=false")
-            return false
-        }
-        return true
+        updateController(chosen)
+        MediaControllerStore.setController(chosen)
+        val pkg = chosen?.packageName
+        val kind = pkg?.let { appKind(it) } ?: AppKind.NONE
+        val playbackState = chosen?.playbackState?.state
+        val playingLike = playbackState == PlaybackState.STATE_PLAYING || playbackState == PlaybackState.STATE_BUFFERING
+        val foreground = pkg != null && ForegroundApp.isForeground(this, pkg)
+        val pip = kind != AppKind.NONE && pipKind == kind
+        val finalPlaying = playingLike && (foreground || pip)
+        val publishPkg = if (kind == AppKind.NONE) null else pkg
+        publishController(publishPkg, finalPlaying)
     }
 
     private fun updateController(controller: MediaController?) {
@@ -135,32 +139,27 @@ class MediaListenerService : NotificationListenerService(),
         controller?.registerCallback(controllerCallback)
     }
 
-    private fun publishActive(pkg: String) {
-        val app = when (pkg) {
-            "com.google.android.youtube" -> AppKind.YOUTUBE
-            "com.google.android.apps.youtube.music" -> AppKind.YTMUSIC
-            "com.spotify.music" -> AppKind.SPOTIFY
-            else -> AppKind.NONE
+    private fun appKind(pkg: String) = when (pkg) {
+        "com.google.android.youtube" -> AppKind.YOUTUBE
+        "com.google.android.apps.youtube.music" -> AppKind.YTMUSIC
+        "com.spotify.music" -> AppKind.SPOTIFY
+        "org.schabi.newpipe" -> AppKind.NEWPIPE
+        else -> AppKind.NONE
+    }
+
+    private fun publishController(pkg: String?, playingLike: Boolean) {
+        val cur = OverlayStateStore.get()
+        val next = if (pkg == null) {
+            cur.copy(app = AppKind.NONE, playing = false)
+        } else {
+            cur.copy(app = appKind(pkg), playing = playingLike)
         }
-        val current = OverlayStateStore.get()
-        val next = current.copy(app = app, playing = true)
         OverlayStateStore.update(this, next)
-        if (!current.playing || current.app != app) {
+        if (pkg != null && !overlayShown) {
             ContextCompat.startForegroundService(this, Intent(this, OverlayService::class.java).apply {
                 action = OverlayService.ACTION_SHOW
             })
+            overlayShown = true
         }
-    }
-
-    private fun publishInactive() {
-        val current = OverlayStateStore.get()
-        val next = current.copy(
-            playing = false,
-            mode = PlayMode.NONE,
-            maskEnabled = false,
-            hole = null,
-            app = AppKind.NONE
-        )
-        OverlayStateStore.update(this, next)
     }
 }

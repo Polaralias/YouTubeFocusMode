@@ -149,7 +149,7 @@ class OverlayService : Service() {
 
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.notif_running))
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.overlay_notification_text))
             .setSmallIcon(android.R.drawable.stat_notify_more)
             .setOngoing(true)
@@ -167,10 +167,10 @@ class OverlayService : Service() {
         ensureBlockView()
         ensureControlsView()
         val state = OverlayStateStore.get()
-        setHole(state.hole)
-        setMaskEnabled(state.maskEnabled && state.playing)
+        setMaskEnabled(state.maskEnabled)
+        setHole(if (state.maskEnabled) state.hole else null)
         blockView?.visibility = View.VISIBLE
-        controlsView?.visibility = View.VISIBLE
+        controlsView?.visibility = if (state.maskEnabled) View.VISIBLE else View.GONE
         updateForOrientation()
         attachController(MediaControllerStore.getController())
         android.util.Log.d(
@@ -185,7 +185,6 @@ class OverlayService : Service() {
         handler.removeCallbacks(applyRunnable)
         pendingApply = false
         removeOverlay()
-        clearController()
     }
 
     private fun ensureBlockView() {
