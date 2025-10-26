@@ -156,6 +156,7 @@ class MediaListenerService : NotificationListenerService(),
     companion object {
         private val TARGET_PACKAGES = setOf(
             "com.google.android.youtube",
+            "org.schabi.newpipe",
             "com.google.android.apps.youtube.music",
             "com.spotify.music"
         )

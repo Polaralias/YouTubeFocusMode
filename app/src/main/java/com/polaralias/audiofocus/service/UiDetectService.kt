@@ -41,7 +41,7 @@ class UiDetectService : AccessibilityService() {
             OverlayBus.pipRect = pip
             var shouldShow = false
             when (pkg) {
-                YOUTUBE_PACKAGE -> {
+                YOUTUBE_PACKAGE, NEWPIPE_PACKAGE -> {
                     OverlayBus.hole = null
                     OverlayBus.maskEnabled = true
                     shouldShow = true
@@ -84,7 +84,7 @@ class UiDetectService : AccessibilityService() {
 
         var shouldShow = false
         when (pkg) {
-            YOUTUBE_PACKAGE -> {
+            YOUTUBE_PACKAGE, NEWPIPE_PACKAGE -> {
                 OverlayBus.maskEnabled = true
                 OverlayBus.hole = null
                 shouldShow = true
@@ -423,6 +423,7 @@ class UiDetectService : AccessibilityService() {
     companion object {
         private const val YOUTUBE_MUSIC_PACKAGE = "com.google.android.apps.youtube.music"
         private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
+        private const val NEWPIPE_PACKAGE = "org.schabi.newpipe"
         private const val SPOTIFY_PACKAGE = "com.spotify.music"
         private const val TOGGLE_PADDING_DP = 12f
         private val KEYWORD_MATCHES = listOf(
@@ -446,6 +447,7 @@ class UiDetectService : AccessibilityService() {
         )
         private val SUPPORTED_PACKAGES = setOf(
             YOUTUBE_PACKAGE,
+            NEWPIPE_PACKAGE,
             YOUTUBE_MUSIC_PACKAGE,
             SPOTIFY_PACKAGE
         )
