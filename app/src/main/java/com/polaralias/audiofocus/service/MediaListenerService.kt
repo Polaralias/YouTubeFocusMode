@@ -8,13 +8,13 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.polaralias.audiofocus.bus.OverlayBus
+import androidx.core.content.ContextCompat
 import com.polaralias.audiofocus.media.MediaControllerStore
-import com.polaralias.audiofocus.media.isActivelyPlaying
+import com.polaralias.audiofocus.overlay.AppKind
+import com.polaralias.audiofocus.overlay.OverlayStateStore
+import com.polaralias.audiofocus.overlay.PlayMode
 import com.polaralias.audiofocus.util.ForegroundApp
 import com.polaralias.audiofocus.util.Logx
-import com.polaralias.audiofocus.util.PermissionStatus
-import com.polaralias.audiofocus.util.SafeServiceStarter
 
 class MediaListenerService : NotificationListenerService(),
     MediaSessionManager.OnActiveSessionsChangedListener {
@@ -64,7 +64,8 @@ class MediaListenerService : NotificationListenerService(),
         super.onListenerDisconnected()
         sessionManager.removeOnActiveSessionsChangedListener(this)
         updateController(null)
-        sendHide()
+        MediaControllerStore.setController(null)
+        publishInactive()
     }
 
     override fun onActiveSessionsChanged(controllers: MutableList<MediaController>?) {
@@ -90,46 +91,37 @@ class MediaListenerService : NotificationListenerService(),
         controllers.forEach { controller ->
             Logx.d("MediaListenerService.evaluateControllers controller=${controller.packageName} state=${controller.playbackState?.state}")
         }
-        val target = controllers.firstOrNull { isTargetActive(it) }
-        Logx.d("MediaListenerService.evaluateControllers selected=${target?.packageName}")
-        val pipAvailable = OverlayBus.pipRect != null
-        val uiDetectionActive = OverlayBus.hasRecentUiDetection()
-        val detectionActive = pipAvailable || uiDetectionActive
-        if (target != null) {
-            updateController(target)
-            MediaControllerStore.setController(target)
-        } else if (!detectionActive) {
+        val active = controllers.firstOrNull { isActive(it) }
+        Logx.d("MediaListenerService.evaluateControllers selected=${active?.packageName}")
+        if (active != null) {
+            updateController(active)
+            MediaControllerStore.setController(active)
+            publishActive(active.packageName)
+        } else {
             updateController(null)
             MediaControllerStore.setController(null)
-        }
-        val pkg = target?.packageName ?: MediaControllerStore.getController()?.packageName
-        val foreground = pkg != null && ForegroundApp.isForeground(this, pkg)
-        val hasPip = pipAvailable && pkg != null
-        val hasUiDetection = uiDetectionActive
-        Logx.d(
-            "MediaListenerService.evaluateControllers visibility pkg=$pkg foreground=$foreground hasPip=$hasPip uiDetect=$hasUiDetection"
-        )
-        val shouldShow = when {
-            target != null -> true
-            detectionActive -> true
-            else -> false
-        }
-        if (shouldShow) {
-            sendShow()
-        } else {
-            sendHide()
+            publishInactive()
         }
     }
 
-    private fun isTargetActive(controller: MediaController): Boolean {
+    private fun isActive(controller: MediaController): Boolean {
         val pkg = controller.packageName
-        val playbackState = controller.playbackState
-        val target = TARGET_PACKAGES.contains(pkg)
-        val active = target && playbackState.isActivelyPlaying()
-        Logx.d(
-            "MediaListenerService.isTargetActive package=$pkg state=${playbackState?.state} speed=${playbackState?.playbackSpeed} active=$active"
-        )
-        return active
+        val target = pkg == "com.google.android.youtube" || pkg == "com.google.android.apps.youtube.music" || pkg == "com.spotify.music"
+        if (!target) {
+            Logx.d("MediaListenerService.isActive package=$pkg target=$target")
+            return false
+        }
+        val state = controller.playbackState?.state
+        val playingLike = state == PlaybackState.STATE_PLAYING || state == PlaybackState.STATE_BUFFERING
+        if (!playingLike) {
+            Logx.d("MediaListenerService.isActive package=$pkg state=$state playingLike=$playingLike")
+            return false
+        }
+        if (!ForegroundApp.isForeground(this, pkg)) {
+            Logx.d("MediaListenerService.isActive package=$pkg foreground=false")
+            return false
+        }
+        return true
     }
 
     private fun updateController(controller: MediaController?) {
@@ -143,30 +135,32 @@ class MediaListenerService : NotificationListenerService(),
         controller?.registerCallback(controllerCallback)
     }
 
-    private fun sendShow() {
-        val snapshot = PermissionStatus.snapshot(this)
-        Logx.d("MediaListenerService.sendShow overlay=${snapshot.overlay} notification=${snapshot.notificationListener} usage=${snapshot.usageAccess} accessibility=${snapshot.accessibility}")
-        val intent = Intent(this, OverlayService::class.java).apply {
-            action = OverlayService.ACTION_SHOW
+    private fun publishActive(pkg: String) {
+        val app = when (pkg) {
+            "com.google.android.youtube" -> AppKind.YOUTUBE
+            "com.google.android.apps.youtube.music" -> AppKind.YTMUSIC
+            "com.spotify.music" -> AppKind.SPOTIFY
+            else -> AppKind.NONE
         }
-        SafeServiceStarter.startFg(this, intent)
+        val current = OverlayStateStore.get()
+        val next = current.copy(app = app, playing = true)
+        OverlayStateStore.update(this, next)
+        if (!current.playing || current.app != app) {
+            ContextCompat.startForegroundService(this, Intent(this, OverlayService::class.java).apply {
+                action = OverlayService.ACTION_SHOW
+            })
+        }
     }
 
-    private fun sendHide() {
-        val snapshot = PermissionStatus.snapshot(this)
-        Logx.d("MediaListenerService.sendHide overlay=${snapshot.overlay} notification=${snapshot.notificationListener} usage=${snapshot.usageAccess} accessibility=${snapshot.accessibility}")
-        val intent = Intent(this, OverlayService::class.java).apply {
-            action = OverlayService.ACTION_HIDE
-        }
-        SafeServiceStarter.startFg(this, intent)
-    }
-
-    companion object {
-        private val TARGET_PACKAGES = setOf(
-            "com.google.android.youtube",
-            "org.schabi.newpipe",
-            "com.google.android.apps.youtube.music",
-            "com.spotify.music"
+    private fun publishInactive() {
+        val current = OverlayStateStore.get()
+        val next = current.copy(
+            playing = false,
+            mode = PlayMode.NONE,
+            maskEnabled = false,
+            hole = null,
+            app = AppKind.NONE
         )
+        OverlayStateStore.update(this, next)
     }
 }

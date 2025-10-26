@@ -31,15 +31,16 @@ import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.polaralias.audiofocus.HoleOverlayView
 import com.polaralias.audiofocus.R
-import com.polaralias.audiofocus.bus.OverlayBus
 import com.polaralias.audiofocus.media.MediaControllerStore
 import com.polaralias.audiofocus.media.isActivelyPlaying
+import com.polaralias.audiofocus.overlay.OverlayStateStore
 import com.polaralias.audiofocus.util.Logx
 
 class OverlayService : Service() {
     companion object {
         const val ACTION_SHOW = "com.polaralias.audiofocus.action.SHOW"
         const val ACTION_HIDE = "com.polaralias.audiofocus.action.HIDE"
+        const val ACTION_UPDATE = "com.polaralias.audiofocus.action.UPDATE"
         private const val CHANNEL_ID = "veil_audio"
         private const val NOTIFICATION_ID = 101
         @Volatile var mediaController: MediaController? = null
@@ -52,6 +53,11 @@ class OverlayService : Service() {
             handler.postDelayed(this, 500)
         }
     }
+    private val applyRunnable = Runnable {
+        pendingApply = false
+        applyState()
+    }
+    private var pendingApply = false
 
     private var windowManager: WindowManager? = null
     private var overlayContext: Context? = null
@@ -111,6 +117,7 @@ class OverlayService : Service() {
         Logx.d("OverlayService.onDestroy")
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
+        pendingApply = false
         MediaControllerStore.removeListener(controllerListener)
         clearController()
         removeOverlay()
@@ -119,8 +126,13 @@ class OverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Logx.d("OverlayService.onStartCommand action=${intent?.action} flags=$flags startId=$startId")
         when (intent?.action) {
+            ACTION_SHOW -> {
+                ensureBlockView()
+                ensureControlsView()
+                scheduleApply()
+            }
+            ACTION_UPDATE -> scheduleApply()
             ACTION_HIDE -> hideOverlay()
-            else -> showOverlay()
         }
         return START_STICKY
     }
@@ -144,28 +156,34 @@ class OverlayService : Service() {
             .build()
     }
 
-    private fun showOverlay() {
-        val canDraw = Settings.canDrawOverlays(this)
-        Logx.d("OverlayService.showOverlay canDraw=$canDraw")
-        if (!canDraw) {
-            return
-        }
+    private fun scheduleApply() {
+        if (pendingApply) return
+        if (!Settings.canDrawOverlays(this)) return
+        pendingApply = true
+        handler.postDelayed(applyRunnable, 200)
+    }
+
+    private fun applyState() {
         ensureBlockView()
         ensureControlsView()
-        setHole(OverlayBus.hole)
-        applyBounds()
-        setMaskEnabled(OverlayBus.maskEnabled)
+        val state = OverlayStateStore.get()
+        setHole(state.hole)
+        setMaskEnabled(state.maskEnabled && state.playing)
         blockView?.visibility = View.VISIBLE
         controlsView?.visibility = View.VISIBLE
         updateForOrientation()
         attachController(MediaControllerStore.getController())
-        handler.removeCallbacks(ticker)
-        handler.post(ticker)
+        android.util.Log.d(
+            "AudioFocus",
+            "apply state app=${state.app} playing=${state.playing} mode=${state.mode} mask=${state.maskEnabled} hole=${state.hole != null}"
+        )
     }
 
     private fun hideOverlay() {
         Logx.d("OverlayService.hideOverlay")
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(applyRunnable)
+        pendingApply = false
         removeOverlay()
         clearController()
     }
@@ -374,7 +392,7 @@ class OverlayService : Service() {
             updateDuration()
             updateState()
         } else {
-            hideOverlay()
+            updateState()
         }
     }
 
@@ -389,11 +407,14 @@ class OverlayService : Service() {
         val controller = currentController
         if (controller == null) {
             Logx.d("OverlayService.updateState controller null")
-            hideOverlay()
+            handler.removeCallbacks(ticker)
+            playPauseButton?.setImageResource(R.drawable.ic_play)
+            playPauseButton?.contentDescription = getString(R.string.media_play)
             return
         }
         val playbackState = controller.playbackState
-        val isPlaying = playbackState.isActivelyPlaying()
+        val stateValue = playbackState?.state
+        val isPlaying = stateValue == PlaybackState.STATE_PLAYING || stateValue == PlaybackState.STATE_BUFFERING
         Logx.d("OverlayService.updateState package=${controller.packageName} state=${playbackState?.state} speed=${playbackState?.playbackSpeed} playing=$isPlaying canDraw=${Settings.canDrawOverlays(this)}")
         if (isPlaying) {
             handler.removeCallbacks(ticker)
