@@ -167,10 +167,11 @@ class OverlayService : Service() {
         ensureBlockView()
         ensureControlsView()
         val state = OverlayStateStore.get()
-        setMaskEnabled(state.maskEnabled)
-        setHole(if (state.maskEnabled) state.hole else null)
-        blockView?.visibility = View.VISIBLE
-        controlsView?.visibility = if (state.maskEnabled) View.VISIBLE else View.GONE
+        val maskActive = state.maskEnabled && state.playing
+        setMaskEnabled(maskActive)
+        setHole(if (maskActive) state.hole else null)
+        blockView?.visibility = if (maskActive) View.VISIBLE else View.GONE
+        controlsView?.visibility = if (maskActive) View.VISIBLE else View.GONE
         updateForOrientation()
         attachController(MediaControllerStore.getController())
         android.util.Log.d(

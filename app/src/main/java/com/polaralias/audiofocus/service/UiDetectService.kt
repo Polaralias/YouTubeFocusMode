@@ -110,7 +110,7 @@ class UiDetectService : AccessibilityService() {
             app = app,
             playing = playingLike,
             mode = mode,
-            maskEnabled = mask && playingLike,
+            maskEnabled = mask,
             hole = if (mask) hole else null
         )
         schedule(next)
@@ -137,42 +137,66 @@ class UiDetectService : AccessibilityService() {
 
     private fun isShortsUi(root: AccessibilityNodeInfo): Boolean {
         val ids = listOf(
-            ":id/shorts",
-            ":id/shorts_container",
-            ":id/shorts_player",
-            ":id/reel",
-            ":id/reels",
-            ":id/reel_player"
+            "shorts",
+            "reel",
+            "reels",
+            "pivot_shorts",
+            "shorts_pivot",
+            "shorts_player"
         )
         val textHits = listOf("Shorts", "Reel")
         val nodes = collect(root)
         val hasId = nodes.any { node ->
-            val id = node.viewIdResourceName
-            id != null && ids.any { hint -> id.endsWith(hint) }
+            val id = node.viewIdResourceName?.lowercase().orEmpty()
+            ids.any { hint -> id.endsWith(hint) || id.contains(hint) }
         }
         val hasTxt = nodes.any { node ->
             val text = node.text?.toString().orEmpty()
             val desc = node.contentDescription?.toString().orEmpty()
             textHits.any { key -> text.contains(key, true) || desc.contains(key, true) }
         }
+        val hasClass = nodes.any { node ->
+            val cls = node.className?.toString().orEmpty()
+            cls.contains("Short", true) || cls.contains("Reel", true)
+        }
         val pager = nodes.any { node ->
             node.isScrollable && (
                 node.className?.toString()?.contains("ViewPager", true) == true ||
-                    node.className?.toString()?.contains("RecyclerView", true) == true
+                    node.className?.toString()?.contains("RecyclerView", true) == true ||
+                    node.className?.toString()?.contains("ViewPager2", true) == true
                 )
         }
-        return hasId || (hasTxt && pager)
+        return hasId || hasClass || (hasTxt && pager)
     }
 
     private fun hasVideoSurface(root: AccessibilityNodeInfo): Boolean {
         return collect(root).any { node ->
             val cls = node.className?.toString().orEmpty()
             val id = node.viewIdResourceName.orEmpty()
-            cls.contains("SurfaceView", true) ||
-                cls.contains("TextureView", true) ||
-                id.endsWith(":id/player_view") ||
-                id.endsWith(":id/video") ||
-                id.endsWith(":id/player_surface")
+            val desc = node.contentDescription?.toString().orEmpty()
+            val clsLower = cls.lowercase()
+            val idLower = id.lowercase()
+            val descLower = desc.lowercase()
+            val classHit = clsLower.contains("surfaceview") ||
+                clsLower.contains("textureview") ||
+                clsLower.contains("playerview") ||
+                clsLower.contains("youtubeplayer") ||
+                clsLower.contains("videoview") ||
+                clsLower.contains("videoplayer") ||
+                clsLower.contains("recyclertextureview")
+            val idHit = idLower.endsWith(":id/player_view") ||
+                idLower.endsWith(":id/video") ||
+                idLower.endsWith(":id/player_surface") ||
+                idLower.contains("player_view") ||
+                idLower.contains("player_container") ||
+                idLower.contains("watch_player") ||
+                idLower.contains("video_surface") ||
+                idLower.contains("video_player") ||
+                idLower.contains("shorts_player")
+            val descHit = descLower.contains("video player") ||
+                descLower.contains("double tap to seek") ||
+                descLower.contains("playing video")
+            classHit || idHit || descHit
         }
     }
 
