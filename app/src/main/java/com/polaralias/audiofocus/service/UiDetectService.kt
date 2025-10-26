@@ -30,6 +30,11 @@ class UiDetectService : AccessibilityService() {
 
         val controller = OverlayService.mediaController ?: MediaControllerStore.getController()
         val activeFromTarget = controller?.packageName == pkg && controller.playbackState?.state == PlaybackState.STATE_PLAYING
+        if (!activeFromTarget) {
+            OverlayBus.pipRect = null
+            OverlayBus.clearUiDetection()
+            return
+        }
 
         val pip = findPipRectFor(pkg)
         if (pip != null) {

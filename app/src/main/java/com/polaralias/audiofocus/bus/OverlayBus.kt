@@ -24,6 +24,5 @@ object OverlayBus {
 
     fun clearUiDetection() {
         lastUiDetectionTimestamp = 0L
-        pipRect = null
     }
 }
