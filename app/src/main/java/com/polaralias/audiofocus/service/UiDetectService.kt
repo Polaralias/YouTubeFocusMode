@@ -8,6 +8,7 @@ import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.polaralias.audiofocus.bus.OverlayBus
+import com.polaralias.audiofocus.media.MediaControllerStore
 import com.polaralias.audiofocus.util.ForegroundApp
 import com.polaralias.audiofocus.util.Logx
 import kotlin.math.max
@@ -27,7 +28,7 @@ class UiDetectService : AccessibilityService() {
             return
         }
 
-        val controller = OverlayService.mediaController
+        val controller = OverlayService.mediaController ?: MediaControllerStore.getController()
         val activeFromTarget = controller?.packageName == pkg && controller.playbackState?.state == PlaybackState.STATE_PLAYING
         if (!activeFromTarget) {
             OverlayBus.pipRect = null
@@ -69,6 +70,11 @@ class UiDetectService : AccessibilityService() {
             return
         } else {
             OverlayBus.pipRect = null
+        }
+
+        if (!activeFromTarget) {
+            OverlayBus.clearUiDetection()
+            return
         }
 
         val inForeground = ForegroundApp.isTargetInForeground(this)
