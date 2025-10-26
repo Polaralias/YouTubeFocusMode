@@ -150,7 +150,13 @@ class MediaListenerService : NotificationListenerService(),
     private fun publishController(pkg: String?, playingLike: Boolean) {
         val cur = OverlayStateStore.get()
         val next = if (pkg == null) {
-            cur.copy(app = AppKind.NONE, playing = false)
+            cur.copy(
+                app = AppKind.NONE,
+                playing = false,
+                mode = PlayMode.NONE,
+                maskEnabled = false,
+                hole = null
+            )
         } else {
             cur.copy(app = appKind(pkg), playing = playingLike)
         }

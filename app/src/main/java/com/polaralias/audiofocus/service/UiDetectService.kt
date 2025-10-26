@@ -51,7 +51,8 @@ class UiDetectService : AccessibilityService() {
         var mode = PlayMode.NONE
         var hole: RectF? = null
         var mask = false
-        val controller = OverlayService.mediaController ?: MediaControllerStore.getController()
+        val controller = (OverlayService.mediaController ?: MediaControllerStore.getController())
+            ?.takeIf { it.packageName == pkg }
         val playingLike = controller?.playbackState?.state in listOf(
             android.media.session.PlaybackState.STATE_PLAYING,
             android.media.session.PlaybackState.STATE_BUFFERING
