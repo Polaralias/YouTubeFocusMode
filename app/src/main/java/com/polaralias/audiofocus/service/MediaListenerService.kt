@@ -91,9 +91,9 @@ class MediaListenerService : NotificationListenerService(),
         }
         val target = controllers.firstOrNull { isTargetActive(it) }
         Logx.d("MediaListenerService.evaluateControllers selected=${target?.packageName}")
-        val hasPip = OverlayBus.pipRect != null
-        val hasUiDetection = OverlayBus.hasRecentUiDetection()
-        val detectionActive = hasPip || hasUiDetection
+        val pipAvailable = OverlayBus.pipRect != null
+        val uiDetectionActive = OverlayBus.hasRecentUiDetection()
+        val detectionActive = pipAvailable || uiDetectionActive
         if (target != null) {
             updateController(target)
             MediaControllerStore.setController(target)
@@ -103,8 +103,8 @@ class MediaListenerService : NotificationListenerService(),
         }
         val pkg = target?.packageName ?: MediaControllerStore.getController()?.packageName
         val foreground = pkg != null && ForegroundApp.isForeground(this, pkg)
-        val hasPip = OverlayBus.pipRect != null && pkg != null
-        val hasUiDetection = OverlayBus.hasRecentUiDetection()
+        val hasPip = pipAvailable && pkg != null
+        val hasUiDetection = uiDetectionActive
         Logx.d(
             "MediaListenerService.evaluateControllers visibility pkg=$pkg foreground=$foreground hasPip=$hasPip uiDetect=$hasUiDetection"
         )
