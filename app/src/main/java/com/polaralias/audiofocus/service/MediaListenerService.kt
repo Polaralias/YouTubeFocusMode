@@ -108,7 +108,12 @@ class MediaListenerService : NotificationListenerService(),
         Logx.d(
             "MediaListenerService.evaluateControllers visibility pkg=$pkg foreground=$foreground hasPip=$hasPip uiDetect=$hasUiDetection"
         )
-        if (target != null && (foreground || hasPip || hasUiDetection)) {
+        val shouldShow = when {
+            target != null -> foreground || hasPip || hasUiDetection
+            detectionActive -> true
+            else -> false
+        }
+        if (shouldShow) {
             sendShow()
         } else {
             sendHide()
