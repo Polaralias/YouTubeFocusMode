@@ -56,6 +56,8 @@ class UiDetectService : AccessibilityService() {
             android.media.session.PlaybackState.STATE_PLAYING,
             android.media.session.PlaybackState.STATE_BUFFERING
         )
+        val controllerPackage = controller?.packageName
+        val playbackForApp = playingLike && controllerPackage == pkg
         if (app == AppKind.YOUTUBE) {
             val shorts = isShortsUi(root)
             val pip = detectPiP(pkg)
@@ -106,12 +108,13 @@ class UiDetectService : AccessibilityService() {
             }
             mask = videoUi
         }
+        val nextMaskEnabled = if (playbackForApp) mask else false
         val next = cur.copy(
             app = app,
-            playing = playingLike,
+            playing = playbackForApp,
             mode = mode,
-            maskEnabled = mask,
-            hole = if (mask) hole else null
+            maskEnabled = nextMaskEnabled,
+            hole = if (nextMaskEnabled) hole else null
         )
         schedule(next)
     }
