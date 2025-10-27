@@ -56,8 +56,10 @@ class UiDetectService : AccessibilityService() {
             android.media.session.PlaybackState.STATE_PLAYING,
             android.media.session.PlaybackState.STATE_BUFFERING
         )
+        val nodes = collect(root)
+        val surfaceFraction = videoSurfaceFraction(nodes)
         if (app == AppKind.YOUTUBE) {
-            val shorts = isShortsUi(root)
+            val shorts = isShortsUi(nodes)
             val pip = detectPiP(pkg)
             when {
                 shorts -> {
@@ -68,7 +70,7 @@ class UiDetectService : AccessibilityService() {
                     mode = PlayMode.PIP
                     mask = true
                 }
-                hasVideoSurface(root) -> {
+                surfaceFraction > 0f -> {
                     mode = PlayMode.VIDEO
                     mask = true
                 }
@@ -78,46 +80,40 @@ class UiDetectService : AccessibilityService() {
             }
         }
         if (app == AppKind.YTMUSIC) {
-            val metrics = resources.displayMetrics
-            val fallbackHole = defaultTopRight(root)
-            val videoUi = hasVideoSurface(root) || collect(root).any {
+            val videoUi = surfaceFraction > 0f || nodes.any {
                 val id = it.viewIdResourceName?.contains("watch", true) == true
                 val desc = it.contentDescription?.toString()?.contains("Video", true) == true
                 id || desc
             }
-            val candidateHole = findToggleRectForMusic(root)
-            hole = sanitizeHole(
-                candidateHole,
-                fallbackHole,
-                metrics.widthPixels.toFloat(),
-                metrics.heightPixels.toFloat()
-            )
+            val fullscreenVideo = videoUi && surfaceFraction >= FULLSCREEN_FRACTION_THRESHOLD
+            hole = if (videoUi && !fullscreenVideo) {
+                topBandHole(root, TOP_BAND_FRACTION)
+            } else {
+                null
+            }
             mode = if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
             mask = videoUi
         }
         if (app == AppKind.SPOTIFY) {
-            val metrics = resources.displayMetrics
-            val fallbackHole = defaultTopRight(root)
-            val videoUi = hasVideoSurface(root) || collect(root).any {
+            val videoUi = surfaceFraction > 0f || nodes.any {
                 it.contentDescription?.toString()?.contains("Video", true) == true ||
                     it.text?.toString()?.contains("Video", true) == true
             }
-            val candidateHole = findToggleRectForSpotify(root)
-            hole = sanitizeHole(
-                candidateHole,
-                fallbackHole,
-                metrics.widthPixels.toFloat(),
-                metrics.heightPixels.toFloat()
-            )
+            val fullscreenVideo = videoUi && surfaceFraction >= FULLSCREEN_FRACTION_THRESHOLD
+            hole = if (videoUi && !fullscreenVideo) {
+                topBandHole(root, TOP_BAND_FRACTION)
+            } else {
+                null
+            }
             mode = if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
             mask = videoUi
         }
         if (app == AppKind.NEWPIPE) {
             val pip = detectPiP(pkg)
-            val videoUi = hasVideoSurface(root) || pip
+            val videoUi = surfaceFraction > 0f || pip
             mode = when {
                 pip -> PlayMode.PIP
-                videoUi -> PlayMode.VIDEO
+                surfaceFraction > 0f -> PlayMode.VIDEO
                 else -> PlayMode.NONE
             }
             mask = videoUi
@@ -156,7 +152,7 @@ class UiDetectService : AccessibilityService() {
         }, 120)
     }
 
-    private fun isShortsUi(root: AccessibilityNodeInfo): Boolean {
+    private fun isShortsUi(nodes: List<AccessibilityNodeInfo>): Boolean {
         val ids = listOf(
             "shorts",
             "reel",
@@ -166,7 +162,6 @@ class UiDetectService : AccessibilityService() {
             "shorts_player"
         )
         val textHits = listOf("Shorts", "Reel")
-        val nodes = collect(root)
         val hasId = nodes.any { node ->
             val id = node.viewIdResourceName?.lowercase().orEmpty()
             ids.any { hint -> id.endsWith(hint) || id.contains(hint) }
@@ -190,23 +185,29 @@ class UiDetectService : AccessibilityService() {
         return hasId || hasClass || (hasTxt && pager)
     }
 
-    private fun hasVideoSurface(root: AccessibilityNodeInfo): Boolean {
+    private fun videoSurfaceFraction(nodes: List<AccessibilityNodeInfo>): Float {
+        val metrics = resources.displayMetrics
+        val screenWidth = metrics.widthPixels.toFloat()
+        val screenHeight = metrics.heightPixels.toFloat()
+        if (screenWidth <= 0f || screenHeight <= 0f) {
+            return 0f
+        }
+        val screenArea = screenWidth * screenHeight
         val screenRect = Rect()
-        return collect(root).any { node ->
+        var best = 0f
+        for (node in nodes) {
             if (!node.isVisibleToUser) {
-                return@any false
+                continue
             }
             node.getBoundsInScreen(screenRect)
-            val area = screenRect.width().coerceAtLeast(0) * screenRect.height().coerceAtLeast(0)
-            if (area <= 0) {
-                return@any false
+            val width = screenRect.width().coerceAtLeast(0)
+            val height = screenRect.height().coerceAtLeast(0)
+            if (width <= 0 || height <= 0) {
+                continue
             }
-            val cls = node.className?.toString().orEmpty()
-            val id = node.viewIdResourceName.orEmpty()
-            val desc = node.contentDescription?.toString().orEmpty()
-            val clsLower = cls.lowercase()
-            val idLower = id.lowercase()
-            val descLower = desc.lowercase()
+            val clsLower = node.className?.toString()?.lowercase().orEmpty()
+            val idLower = node.viewIdResourceName.orEmpty().lowercase()
+            val descLower = node.contentDescription?.toString()?.lowercase().orEmpty()
             val classHit = clsLower.contains("surfaceview") ||
                 clsLower.contains("textureview") ||
                 clsLower.contains("playerview") ||
@@ -226,8 +227,15 @@ class UiDetectService : AccessibilityService() {
             val descHit = descLower.contains("video player") ||
                 descLower.contains("double tap to seek") ||
                 descLower.contains("playing video")
-            classHit || idHit || descHit
+            if (classHit || idHit || descHit) {
+                val area = width.toFloat() * height.toFloat()
+                val fraction = (area / screenArea).coerceAtLeast(0f)
+                if (fraction > best) {
+                    best = fraction
+                }
+            }
         }
+        return best.coerceIn(0f, 1f)
     }
 
     private fun detectPiP(packageName: String): Boolean {
@@ -243,104 +251,18 @@ class UiDetectService : AccessibilityService() {
         }
     }
 
-    private fun findToggleRectForMusic(root: AccessibilityNodeInfo): RectF? {
+    private fun topBandHole(root: AccessibilityNodeInfo, fraction: Float): RectF {
         val metrics = resources.displayMetrics
-        val padding = 12f * metrics.density
-        val bounds = Rect()
-        val queue = ArrayDeque<AccessibilityNodeInfo?>()
-        queue.add(root)
-        val keywords = listOf("switch to audio", "switch to song", "switch to video", "audio", "song", "video")
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst() ?: continue
-            val value = node.text?.toString().takeUnless { it.isNullOrBlank() }
-                ?: node.contentDescription?.toString().takeUnless { it.isNullOrBlank() }
-            val lower = value?.lowercase()
-            if (!lower.isNullOrEmpty() && keywords.any { lower.contains(it) }) {
-                node.getBoundsInScreen(bounds)
-                if (!bounds.isEmpty) {
-                    var rect = RectF(bounds)
-                    rect.inset(-padding, -padding)
-                    rect = clampToScreen(rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                    return enrichWithParentBounds(node, rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                }
-            }
-            for (i in 0 until node.childCount) {
-                queue.add(node.getChild(i))
-            }
-        }
-        return null
-    }
-
-    private fun findToggleRectForSpotify(root: AccessibilityNodeInfo): RectF? {
-        findSpotifyRectByText(root)?.let { return it }
-        findSpotifyRectById(root)?.let { return it }
-        return null
-    }
-
-    private fun findSpotifyRectByText(root: AccessibilityNodeInfo): RectF? {
-        val metrics = resources.displayMetrics
-        val padding = 12f * metrics.density
-        val bounds = Rect()
-        val queue = ArrayDeque<AccessibilityNodeInfo?>()
-        val hints = listOf("video", "show video", "hide video", "switch to video", "switch to audio")
-        queue.add(root)
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst() ?: continue
-            if (!node.isVisibleToUser) {
-                for (i in 0 until node.childCount) {
-                    queue.add(node.getChild(i))
-                }
-                continue
-            }
-            val value = node.text?.toString().takeUnless { it.isNullOrBlank() }
-                ?: node.contentDescription?.toString()
-            val lower = value?.lowercase()
-            if (!lower.isNullOrEmpty() && hints.any { lower.contains(it) }) {
-                node.getBoundsInScreen(bounds)
-                if (!bounds.isEmpty) {
-                    var rect = RectF(bounds)
-                    rect.inset(-padding, -padding)
-                    rect = clampToScreen(rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                    return enrichWithParentBounds(node, rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                }
-            }
-            for (i in 0 until node.childCount) {
-                queue.add(node.getChild(i))
-            }
-        }
-        return null
-    }
-
-    private fun findSpotifyRectById(root: AccessibilityNodeInfo): RectF? {
-        val metrics = resources.displayMetrics
-        val padding = 12f * metrics.density
-        val bounds = Rect()
-        val queue = ArrayDeque<AccessibilityNodeInfo?>()
-        val hints = listOf(":id/video", ":id/player_video", ":id/toggle", ":id/switch")
-        queue.add(root)
-        while (queue.isNotEmpty()) {
-            val node = queue.removeFirst() ?: continue
-            if (!node.isVisibleToUser) {
-                for (i in 0 until node.childCount) {
-                    queue.add(node.getChild(i))
-                }
-                continue
-            }
-            val viewId = node.viewIdResourceName.orEmpty()
-            if (hints.any { viewId.endsWith(it) || viewId.contains(it) }) {
-                node.getBoundsInScreen(bounds)
-                if (!bounds.isEmpty) {
-                    var rect = RectF(bounds)
-                    rect.inset(-padding, -padding)
-                    rect = clampToScreen(rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                    return enrichWithParentBounds(node, rect, metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat())
-                }
-            }
-            for (i in 0 until node.childCount) {
-                queue.add(node.getChild(i))
-            }
-        }
-        return null
+        val screenWidth = metrics.widthPixels.toFloat().coerceAtLeast(0f)
+        val screenHeight = metrics.heightPixels.toFloat().coerceAtLeast(0f)
+        val clampedFraction = fraction.coerceIn(0f, 1f)
+        val rootBounds = Rect()
+        root.getBoundsInScreen(rootBounds)
+        val topBase = rootBounds.top.toFloat().coerceIn(0f, screenHeight)
+        val availableHeight = (screenHeight - topBase).coerceAtLeast(0f)
+        val bandHeight = (availableHeight * clampedFraction).coerceAtMost(screenHeight)
+        val bottom = (topBase + bandHeight).coerceIn(topBase, screenHeight)
+        return RectF(0f, topBase, screenWidth, bottom)
     }
 
     private fun collect(root: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> {
@@ -357,77 +279,6 @@ class UiDetectService : AccessibilityService() {
         return result
     }
 
-    private fun enrichWithParentBounds(
-        node: AccessibilityNodeInfo,
-        fallback: RectF,
-        screenWidth: Float,
-        screenHeight: Float
-    ): RectF {
-        var best = fallback
-        var parent = node.parent
-        val bounds = Rect()
-        var depth = 0
-        while (parent != null && depth < 4) {
-            parent.getBoundsInScreen(bounds)
-            if (!bounds.isEmpty) {
-                val rect = clampToScreen(RectF(bounds), screenWidth, screenHeight)
-                val wideEnough = rect.width() >= best.width() * 0.9f
-                val tallEnough = rect.height() >= best.height() * 0.9f
-                if (wideEnough && tallEnough) {
-                    best = rect
-                }
-            }
-            val next = parent.parent
-            parent.recycle()
-            parent = next
-            depth++
-        }
-        return best
-    }
-
-    private fun clampToScreen(rect: RectF, screenWidth: Float, screenHeight: Float): RectF {
-        val left = rect.left.coerceIn(0f, screenWidth)
-        val top = rect.top.coerceIn(0f, screenHeight)
-        val right = rect.right.coerceIn(left, screenWidth)
-        val bottom = rect.bottom.coerceIn(top, screenHeight)
-        return RectF(left, top, right, bottom)
-    }
-
-    private fun sanitizeHole(
-        candidate: RectF?,
-        fallback: RectF,
-        screenWidth: Float,
-        screenHeight: Float
-    ): RectF {
-        val chosen = candidate ?: return fallback
-        val width = chosen.width().coerceAtLeast(0f)
-        val height = chosen.height().coerceAtLeast(0f)
-        if (width <= 0f || height <= 0f) {
-            return fallback
-        }
-        val screenArea = (screenWidth * screenHeight).takeIf { it > 0f } ?: return fallback
-        val area = width * height
-        val tooWide = width > screenWidth * 0.6f
-        val tooTall = height > screenHeight * 0.6f
-        val tooLarge = area > screenArea * 0.25f
-        return if (tooWide || tooTall || tooLarge) fallback else chosen
-    }
-
-    private fun defaultTopRight(root: AccessibilityNodeInfo): RectF {
-        val metrics = resources.displayMetrics
-        val density = metrics.density
-        val size = 96f * density
-        val margin = 16f * density
-        val rootBounds = Rect()
-        root.getBoundsInScreen(rootBounds)
-        val topBase = rootBounds.top.toFloat().coerceAtLeast(0f)
-        val left = metrics.widthPixels - size - margin
-        val top = margin + topBase
-        val right = metrics.widthPixels - margin
-        val bottom = top + size
-        return RectF(left.coerceAtLeast(0f), top, right.coerceAtLeast(left), bottom)
-    }
-
     companion object {
         private const val YOUTUBE = "com.google.android.youtube"
         private const val YTMUSIC = "com.google.android.apps.youtube.music"
@@ -435,5 +286,7 @@ class UiDetectService : AccessibilityService() {
         private const val NEWPIPE = "org.schabi.newpipe"
         private val SUPPORTED = setOf(YOUTUBE, YTMUSIC, SPOTIFY, NEWPIPE)
         private val TARGET_PACKAGES = arrayOf(YOUTUBE, YTMUSIC, SPOTIFY, NEWPIPE)
+        private const val FULLSCREEN_FRACTION_THRESHOLD = 0.45f
+        private const val TOP_BAND_FRACTION = 0.25f
     }
 }
