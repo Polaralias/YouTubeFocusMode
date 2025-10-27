@@ -78,10 +78,16 @@ class UiDetectService : AccessibilityService() {
             }
         }
         if (app == AppKind.YTMUSIC) {
-            val videoUi = surfaceFraction > 0f || nodes.any {
+            val selectedMode = ytMusicSelectedMode(nodes)
+            val detectedVideoUi = surfaceFraction > 0f || nodes.any {
                 val id = it.viewIdResourceName?.contains("watch", true) == true
                 val desc = it.contentDescription?.toString()?.contains("Video", true) == true
                 id || desc
+            }
+            val videoUi = when (selectedMode) {
+                PlayMode.AUDIO -> false
+                PlayMode.VIDEO -> true
+                else -> detectedVideoUi
             }
             val fullscreenVideo = videoUi && surfaceFraction >= FULLSCREEN_FRACTION_THRESHOLD
             hole = if (videoUi && !fullscreenVideo) {
@@ -89,7 +95,7 @@ class UiDetectService : AccessibilityService() {
             } else {
                 null
             }
-            mode = if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
+            mode = selectedMode ?: if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
             mask = videoUi
         }
         if (app == AppKind.SPOTIFY) {
@@ -252,6 +258,27 @@ class UiDetectService : AccessibilityService() {
         }
     }
 
+    private fun ytMusicSelectedMode(nodes: List<AccessibilityNodeInfo>): PlayMode? {
+        val labels = setOf("song", "songs", "video", "videos")
+        nodes.forEach { node ->
+            if (!node.isSelected) {
+                return@forEach
+            }
+            val label = node.text?.toString().orEmpty().ifBlank {
+                node.contentDescription?.toString().orEmpty()
+            }.trim().lowercase()
+            if (!labels.contains(label)) {
+                return@forEach
+            }
+            return when {
+                label.startsWith("song") -> PlayMode.AUDIO
+                label.startsWith("video") -> PlayMode.VIDEO
+                else -> null
+            }
+        }
+        return null
+    }
+
     private fun topBandHole(root: AccessibilityNodeInfo, fraction: Float): RectF {
         val metrics = resources.displayMetrics
         val screenWidth = metrics.widthPixels.toFloat().coerceAtLeast(0f)
@@ -288,6 +315,6 @@ class UiDetectService : AccessibilityService() {
         private val SUPPORTED = setOf(YOUTUBE, YTMUSIC, SPOTIFY, NEWPIPE)
         private val TARGET_PACKAGES = arrayOf(YOUTUBE, YTMUSIC, SPOTIFY, NEWPIPE)
         private const val FULLSCREEN_FRACTION_THRESHOLD = 0.45f
-        private const val TOP_BAND_FRACTION = 0.25f
+        private const val TOP_BAND_FRACTION = 0.22f
     }
 }

@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
+import android.view.MotionEvent
 import android.view.View
 
 class HoleOverlayView(ctx: Context) : View(ctx) {
@@ -16,6 +17,22 @@ class HoleOverlayView(ctx: Context) : View(ctx) {
 
     fun setHole(r: RectF?) { hole = r; invalidate() }
     fun setMaskEnabled(enabled: Boolean) { maskEnabled = enabled; invalidate() }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!maskEnabled) {
+            return false
+        }
+        val holeRect = hole
+        if (holeRect == null) {
+            return true
+        }
+        val insideHole = holeRect.contains(event.x, event.y)
+        return if (insideHole) {
+            false
+        } else {
+            true
+        }
+    }
 
     override fun onDraw(canvas: Canvas) {
         if (!maskEnabled && hole == null) return
