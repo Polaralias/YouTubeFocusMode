@@ -79,23 +79,21 @@ class UiDetectService : AccessibilityService() {
         }
         if (app == AppKind.YTMUSIC) {
             val selectedMode = ytMusicSelectedMode(nodes)
-            val detectedVideoUi = surfaceFraction > 0f || nodes.any {
-                val id = it.viewIdResourceName?.contains("watch", true) == true
-                val desc = it.contentDescription?.toString()?.contains("Video", true) == true
-                id || desc
-            }
-            val videoUi = when (selectedMode) {
-                PlayMode.AUDIO -> false
-                PlayMode.VIDEO -> true
-                else -> detectedVideoUi
+            val miniPlayer = ytMusicMiniPlayerVisible(nodes)
+            val hasVideoSurface = surfaceFraction >= YT_MUSIC_VIDEO_SURFACE_THRESHOLD
+            val videoUi = when {
+                miniPlayer -> false
+                !hasVideoSurface -> false
+                selectedMode == PlayMode.AUDIO -> false
+                else -> true
             }
             val fullscreenVideo = videoUi && surfaceFraction >= FULLSCREEN_FRACTION_THRESHOLD
             hole = if (videoUi && !fullscreenVideo) {
-                topBandHole(root, TOP_BAND_FRACTION)
+                topBandHole(root, YT_MUSIC_VIDEO_HOLE_FRACTION)
             } else {
                 null
             }
-            mode = selectedMode ?: if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
+            mode = if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
             mask = videoUi
         }
         if (app == AppKind.SPOTIFY) {
@@ -279,6 +277,24 @@ class UiDetectService : AccessibilityService() {
         return null
     }
 
+    private fun ytMusicMiniPlayerVisible(nodes: List<AccessibilityNodeInfo>): Boolean {
+        val idHints = listOf("mini_player", "miniplayer", "player_bar", "collapsed_player")
+        nodes.forEach { node ->
+            if (!node.isVisibleToUser) {
+                return@forEach
+            }
+            val id = node.viewIdResourceName?.lowercase().orEmpty()
+            if (idHints.any { id.contains(it) }) {
+                return true
+            }
+            val desc = node.contentDescription?.toString()?.lowercase().orEmpty()
+            if (desc.contains("mini player") || desc.contains("collapsed player")) {
+                return true
+            }
+        }
+        return false
+    }
+
     private fun topBandHole(root: AccessibilityNodeInfo, fraction: Float): RectF {
         val metrics = resources.displayMetrics
         val screenWidth = metrics.widthPixels.toFloat().coerceAtLeast(0f)
@@ -316,5 +332,7 @@ class UiDetectService : AccessibilityService() {
         private val TARGET_PACKAGES = arrayOf(YOUTUBE, YTMUSIC, SPOTIFY, NEWPIPE)
         private const val FULLSCREEN_FRACTION_THRESHOLD = 0.45f
         private const val TOP_BAND_FRACTION = 0.22f
+        private const val YT_MUSIC_VIDEO_SURFACE_THRESHOLD = 0.15f
+        private const val YT_MUSIC_VIDEO_HOLE_FRACTION = 1f / 6f
     }
 }
