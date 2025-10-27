@@ -11,7 +11,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.polaralias.audiofocus.media.MediaControllerStore
 import com.polaralias.audiofocus.overlay.AppKind
-import com.polaralias.audiofocus.overlay.OverlayState
 import com.polaralias.audiofocus.overlay.OverlayStateStore
 import com.polaralias.audiofocus.overlay.PlayMode
 import com.polaralias.audiofocus.util.Logx
@@ -47,7 +46,6 @@ class UiDetectService : AccessibilityService() {
         if (app == AppKind.NONE) {
             return
         }
-        val cur = OverlayStateStore.get()
         var mode = PlayMode.NONE
         var hole: RectF? = null
         var mask = false
@@ -118,31 +116,34 @@ class UiDetectService : AccessibilityService() {
             }
             mask = videoUi
         }
-        val playing = if (!playingLike) {
-            false
-        } else {
-            cur.playing
-        }
-        val next = cur.copy(
-            app = app,
-            playing = playing,
-            mode = mode,
-            maskEnabled = mask,
-            hole = if (mask) hole else null
-        )
-        schedule(next)
+        schedule(app, mode, mask, hole, playingLike)
     }
 
     override fun onInterrupt() {
         Logx.d("UiDetectService.onInterrupt")
     }
 
-    private fun schedule(next: OverlayState) {
+    private fun schedule(
+        app: AppKind,
+        mode: PlayMode,
+        mask: Boolean,
+        hole: RectF?,
+        playingLike: Boolean
+    ) {
         if (pending) return
         pending = true
         h.postDelayed({
             pending = false
-            if (OverlayStateStore.get() == next) {
+            val cur = OverlayStateStore.get()
+            val playing = if (playingLike) cur.playing else false
+            val next = cur.copy(
+                app = app,
+                playing = playing,
+                mode = mode,
+                maskEnabled = mask,
+                hole = if (mask) hole else null
+            )
+            if (cur == next) {
                 return@postDelayed
             }
             OverlayStateStore.update(this, next)
