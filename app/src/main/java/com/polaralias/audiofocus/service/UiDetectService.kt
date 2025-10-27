@@ -106,9 +106,14 @@ class UiDetectService : AccessibilityService() {
             }
             mask = videoUi
         }
+        val playing = if (!playingLike) {
+            false
+        } else {
+            cur.playing
+        }
         val next = cur.copy(
             app = app,
-            playing = playingLike,
+            playing = playing,
             mode = mode,
             maskEnabled = mask,
             hole = if (mask) hole else null
