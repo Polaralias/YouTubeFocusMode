@@ -78,21 +78,37 @@ class UiDetectService : AccessibilityService() {
             }
         }
         if (app == AppKind.YTMUSIC) {
+            val metrics = resources.displayMetrics
+            val fallbackHole = defaultTopRight(root)
             val videoUi = hasVideoSurface(root) || collect(root).any {
                 val id = it.viewIdResourceName?.contains("watch", true) == true
                 val desc = it.contentDescription?.toString()?.contains("Video", true) == true
                 id || desc
             }
-            hole = findToggleRectForMusic(root) ?: defaultTopRight(root)
+            val candidateHole = findToggleRectForMusic(root)
+            hole = sanitizeHole(
+                candidateHole,
+                fallbackHole,
+                metrics.widthPixels.toFloat(),
+                metrics.heightPixels.toFloat()
+            )
             mode = if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
             mask = videoUi
         }
         if (app == AppKind.SPOTIFY) {
+            val metrics = resources.displayMetrics
+            val fallbackHole = defaultTopRight(root)
             val videoUi = hasVideoSurface(root) || collect(root).any {
                 it.contentDescription?.toString()?.contains("Video", true) == true ||
                     it.text?.toString()?.contains("Video", true) == true
             }
-            hole = findToggleRectForSpotify(root) ?: defaultTopRight(root)
+            val candidateHole = findToggleRectForSpotify(root)
+            hole = sanitizeHole(
+                candidateHole,
+                fallbackHole,
+                metrics.widthPixels.toFloat(),
+                metrics.heightPixels.toFloat()
+            )
             mode = if (videoUi) PlayMode.VIDEO else PlayMode.AUDIO
             mask = videoUi
         }
@@ -175,7 +191,16 @@ class UiDetectService : AccessibilityService() {
     }
 
     private fun hasVideoSurface(root: AccessibilityNodeInfo): Boolean {
+        val screenRect = Rect()
         return collect(root).any { node ->
+            if (!node.isVisibleToUser) {
+                return@any false
+            }
+            node.getBoundsInScreen(screenRect)
+            val area = screenRect.width().coerceAtLeast(0) * screenRect.height().coerceAtLeast(0)
+            if (area <= 0) {
+                return@any false
+            }
             val cls = node.className?.toString().orEmpty()
             val id = node.viewIdResourceName.orEmpty()
             val desc = node.contentDescription?.toString().orEmpty()
@@ -366,6 +391,26 @@ class UiDetectService : AccessibilityService() {
         val right = rect.right.coerceIn(left, screenWidth)
         val bottom = rect.bottom.coerceIn(top, screenHeight)
         return RectF(left, top, right, bottom)
+    }
+
+    private fun sanitizeHole(
+        candidate: RectF?,
+        fallback: RectF,
+        screenWidth: Float,
+        screenHeight: Float
+    ): RectF {
+        val chosen = candidate ?: return fallback
+        val width = chosen.width().coerceAtLeast(0f)
+        val height = chosen.height().coerceAtLeast(0f)
+        if (width <= 0f || height <= 0f) {
+            return fallback
+        }
+        val screenArea = (screenWidth * screenHeight).takeIf { it > 0f } ?: return fallback
+        val area = width * height
+        val tooWide = width > screenWidth * 0.6f
+        val tooTall = height > screenHeight * 0.6f
+        val tooLarge = area > screenArea * 0.25f
+        return if (tooWide || tooTall || tooLarge) fallback else chosen
     }
 
     private fun defaultTopRight(root: AccessibilityNodeInfo): RectF {
