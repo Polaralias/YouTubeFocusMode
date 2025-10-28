@@ -14,6 +14,7 @@ import com.polaralias.audiofocus.overlay.AppKind
 import com.polaralias.audiofocus.overlay.OverlayStateStore
 import com.polaralias.audiofocus.overlay.PlayMode
 import com.polaralias.audiofocus.util.Logx
+import kotlin.math.max
 
 class UiDetectService : AccessibilityService() {
     private val h = Handler(Looper.getMainLooper())
@@ -257,25 +258,144 @@ class UiDetectService : AccessibilityService() {
     }
 
     private fun ytMusicSelectedMode(nodes: List<AccessibilityNodeInfo>): PlayMode? {
-        val labels = setOf("song", "songs", "video", "videos")
+        if (nodes.isEmpty()) {
+            return null
+        }
+        val scores = HashMap<PlayMode, SelectionConfidence>()
         nodes.forEach { node ->
-            if (!node.isSelected) {
+            val mode = ytMusicModeCandidate(node) ?: return@forEach
+            val confidence = ytMusicSelectionConfidence(node)
+            val existing = scores[mode]
+            if (existing == null) {
+                scores[mode] = confidence
+            } else {
+                scores[mode] = SelectionConfidence(
+                    selectedScore = max(existing.selectedScore, confidence.selectedScore),
+                    unselectedScore = max(existing.unselectedScore, confidence.unselectedScore)
+                )
+            }
+        }
+        if (scores.isEmpty()) {
+            return null
+        }
+        val confident = scores.entries
+            .filter { it.value.selectedScore > it.value.unselectedScore }
+            .maxByOrNull { it.value.selectedScore - it.value.unselectedScore }
+        if (confident != null && confident.value.selectedScore > 0) {
+            return confident.key
+        }
+        if (scores.size == 2) {
+            val unselectedOnly = scores.entries.filter {
+                it.value.selectedScore == 0 && it.value.unselectedScore > 0
+            }
+            if (unselectedOnly.size == 1) {
+                val selectedCandidate = scores.entries.firstOrNull { it.key != unselectedOnly[0].key }
+                if (selectedCandidate != null && selectedCandidate.value.unselectedScore == 0) {
+                    return selectedCandidate.key
+                }
+            }
+        }
+        val fallback = scores.entries.maxByOrNull { it.value.selectedScore }
+        if (fallback != null && fallback.value.selectedScore > 0) {
+            return fallback.key
+        }
+        return null
+    }
+
+    private fun ytMusicModeCandidate(node: AccessibilityNodeInfo): PlayMode? {
+        val sources = sequenceOf(
+            node.text,
+            node.contentDescription,
+            node.stateDescription
+        )
+        sources.forEach { source ->
+            val label = source?.toString()?.trim()?.lowercase().orEmpty()
+            if (label.isEmpty()) {
                 return@forEach
             }
-            val label = node.text?.toString().orEmpty().ifBlank {
-                node.contentDescription?.toString().orEmpty()
-            }.trim().lowercase()
-            if (!labels.contains(label)) {
-                return@forEach
-            }
-            return when {
-                label.startsWith("song") -> PlayMode.AUDIO
-                label.startsWith("video") -> PlayMode.VIDEO
-                else -> null
+            when {
+                label.startsWith("song") || label.startsWith("audio") -> return PlayMode.AUDIO
+                label.startsWith("video") -> return PlayMode.VIDEO
             }
         }
         return null
     }
+
+    private fun ytMusicSelectionConfidence(node: AccessibilityNodeInfo): SelectionConfidence {
+        var current: AccessibilityNodeInfo? = node
+        var depth = 0
+        val recycle = ArrayList<AccessibilityNodeInfo>()
+        var bestSelected = 0
+        var bestUnselected = 0
+        while (current != null && depth < 4) {
+            val hints = selectionHints(current)
+            val penalty = depth * 5
+            bestSelected = max(bestSelected, (hints.selectedScore - penalty).coerceAtLeast(0))
+            bestUnselected = max(bestUnselected, (hints.unselectedScore - penalty).coerceAtLeast(0))
+            val parent = current.parent
+            if (parent != null) {
+                recycle.add(parent)
+            }
+            current = parent
+            depth++
+        }
+        recycle.forEach { it.recycle() }
+        return SelectionConfidence(bestSelected, bestUnselected)
+    }
+
+    private fun selectionHints(node: AccessibilityNodeInfo): SelectionConfidence {
+        var selected = 0
+        var unselected = 0
+        if (node.isSelected) {
+            selected = max(selected, 100)
+        }
+        if (node.isChecked) {
+            selected = max(selected, 90)
+        }
+        if (node.isActivated) {
+            selected = max(selected, 80)
+        }
+        if (node.isFocusable && node.isFocused) {
+            selected = max(selected, 60)
+        }
+        val desc = node.contentDescription?.toString()?.lowercase().orEmpty()
+        val state = node.stateDescription?.toString()?.lowercase().orEmpty()
+        val text = node.text?.toString()?.lowercase().orEmpty()
+        val viewId = node.viewIdResourceName?.lowercase().orEmpty()
+        if (containsAny(desc, SELECTED_HINTS) || containsAny(state, SELECTED_HINTS) ||
+            containsAny(viewId, SELECTED_HINTS) || text.contains("selected") ||
+            text.contains("currently")) {
+            selected = max(selected, 70)
+        }
+        if (viewId.contains("selected")) {
+            selected = max(selected, 50)
+        }
+        if (containsAny(desc, UNSELECTED_HINTS) || containsAny(state, UNSELECTED_HINTS) ||
+            containsAny(text, UNSELECTED_HINTS)) {
+            unselected = max(unselected, 70)
+        }
+        if (desc.contains("not selected") || state.contains("not selected") || text.contains("not selected")) {
+            unselected = max(unselected, 80)
+        }
+        return SelectionConfidence(selected, unselected)
+    }
+
+    private fun containsAny(haystack: String, needles: List<String>): Boolean {
+        if (haystack.isEmpty()) {
+            return false
+        }
+        needles.forEach { needle ->
+            if (haystack.contains(needle)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private data class SelectionConfidence(
+        val selectedScore: Int,
+        val unselectedScore: Int
+    )
 
     private fun ytMusicMiniPlayerVisible(nodes: List<AccessibilityNodeInfo>): Boolean {
         val metrics = resources.displayMetrics
@@ -350,5 +470,31 @@ class UiDetectService : AccessibilityService() {
         private const val YT_MUSIC_VIDEO_HOLE_FRACTION = 1f / 6f
         private const val YT_MUSIC_MINI_PLAYER_MAX_HEIGHT_FRACTION = 0.4f
         private const val YT_MUSIC_MINI_PLAYER_BOTTOM_ANCHOR_FRACTION = 0.2f
+        private val SELECTED_HINTS = listOf(
+            "selected",
+            "currently playing",
+            "currently selected",
+            "current tab",
+            "current selection",
+            "active tab",
+            "active selection",
+            "now playing"
+        )
+        private val UNSELECTED_HINTS = listOf(
+            "switch to",
+            "double tap to switch",
+            "tap to switch",
+            "tap to select",
+            "tap to view",
+            "tap to watch",
+            "view video",
+            "view song",
+            "play video",
+            "play song",
+            "open video",
+            "open song",
+            "watch video",
+            "watch song"
+        )
     }
 }
