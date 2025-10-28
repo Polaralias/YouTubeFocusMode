@@ -55,7 +55,9 @@ class UiDetectService : AccessibilityService() {
             android.media.session.PlaybackState.STATE_BUFFERING
         )
         val nodes = collect(root)
-        val surfaceFraction = videoSurfaceFraction(nodes)
+        val overlayState = OverlayStateStore.get()
+        val allowHiddenVideoNodes = overlayState.maskEnabled && overlayState.app == app
+        val surfaceFraction = videoSurfaceFraction(nodes, allowHiddenVideoNodes)
         if (app == AppKind.YOUTUBE) {
             val shorts = isShortsUi(nodes)
             val pip = detectPiP(pkg)
@@ -185,7 +187,10 @@ class UiDetectService : AccessibilityService() {
         return hasId || hasClass || (hasTxt && pager)
     }
 
-    private fun videoSurfaceFraction(nodes: List<AccessibilityNodeInfo>): Float {
+    private fun videoSurfaceFraction(
+        nodes: List<AccessibilityNodeInfo>,
+        allowHidden: Boolean
+    ): Float {
         val metrics = resources.displayMetrics
         val screenWidth = metrics.widthPixels.toFloat()
         val screenHeight = metrics.heightPixels.toFloat()
@@ -196,7 +201,7 @@ class UiDetectService : AccessibilityService() {
         val screenRect = Rect()
         var best = 0f
         for (node in nodes) {
-            if (!node.isVisibleToUser) {
+            if (!allowHidden && !node.isVisibleToUser) {
                 continue
             }
             node.getBoundsInScreen(screenRect)
